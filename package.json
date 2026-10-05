@@ -1,0 +1,26 @@
+{
+  "name": "@mood481/dev-standards",
+  "version": "0.1.0",
+  "description": "Versioned development rules and implementation guides for mood481 repositories.",
+  "type": "module",
+  "bin": {
+    "dev-standards": "./bin/dev-standards.mjs"
+  },
+  "files": [
+    "bin/**",
+    "rules/**",
+    "guides/**",
+    "schemas/**",
+    "templates/**",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

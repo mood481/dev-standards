@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mood481:dev-standards:manifest:v1",
+  "title": "Development standards manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "source", "rules", "guides", "operations"],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "version"],
+      "properties": {
+        "repository": {
+          "const": "mood481/dev-standards"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+        }
+      }
+    },
+    "rules": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": ["development", "quality", "commits", "pull-requests", "triar"]
+      }
+    },
+    "guides": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": ["typescript-javascript", "angular", "pocketbase", "go", "nx-pnpm"]
+      }
+    },
+    "operations": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^docs/operations/[^/]+\\.md$"
+      }
+    }
+  }
+}
