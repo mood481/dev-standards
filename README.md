@@ -25,7 +25,7 @@ Repository-specific operational documentation stays in the consuming repository.
   "context": [
     {
       "type": "rule",
-      "id": "development",
+      "id": "devel",
       "path": "docs/rules/development.md",
       "integrity": "sha256:7595d41ab4f88e7dfec9647a0165cc023a6502f05733b0d21fe9914abf9ea254"
     },
@@ -57,7 +57,7 @@ The schema is published as `schemas/manifest.schema.json`, and a complete packag
 
 ### Rules
 
-- `development` — scope, cohesion, boundaries and change discipline.
+- `devel` — scope, cohesion, boundaries and change discipline.
 - `quality` — validation and completion expectations.
 - `commits` — commit history conventions.
 - `pull-requests` — pull request integration and review conventions.
@@ -65,7 +65,7 @@ The schema is published as `schemas/manifest.schema.json`, and a complete packag
 
 ### Guides
 
-- `typescript-javascript`
+- `ts-js`
 - `angular`
 - `pocketbase`
 - `go`
@@ -102,11 +102,11 @@ Install selected standards into the current repository:
 
 ```bash
 pnpm dlx @mood481/dev-standards@0.2.0-alpha.0 install \
-  development \
+  devel \
   quality \
   commits \
   pull-requests \
-  typescript-javascript \
+  ts-js \
   pocketbase \
   nx-pnpm
 ```
@@ -139,8 +139,8 @@ For `mplanner-one` in its current backend-only state, the intended initial selec
 
 ```bash
 pnpm dlx @mood481/dev-standards@0.2.0-alpha.0 install \
-  development quality commits pull-requests \
-  typescript-javascript pocketbase nx-pnpm
+  devel quality commits pull-requests \
+  ts-js pocketbase nx-pnpm
 ```
 
 Add `angular` when the Angular SDK/web libraries are introduced and `triar` only when TRIAR is adopted by the repository.
@@ -190,7 +190,7 @@ npm test
 npm pack --dry-run
 
 node ./bin/dev-standards.mjs list
-node ./bin/dev-standards.mjs install development quality --path /tmp/example
+node ./bin/dev-standards.mjs install devel quality --path /tmp/example
 node ./bin/dev-standards.mjs check --path /tmp/example
 ```
 

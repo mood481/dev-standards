@@ -467,25 +467,33 @@ async function readManifest(repository, { required }) {
 
     const item = catalog.get(entry.id);
     const ownership = contextTypes.get(entry.type).ownership;
+    const directory = contextTypes.get(entry.type).directory;
+    if (ownership === 'consumer' && entry.integrity) {
+      throw new Error(
+        `Consumer-owned context cannot declare integrity: ${entry.type}/${entry.id}`,
+      );
+    }
+
     if (ownership === 'managed' || entry.integrity) {
       if (
         item?.type !== entry.type ||
-        entry.path !== item.path ||
+        entry.path !== item?.path ||
         !entry.integrity
       ) {
         throw new Error(
           `Existing manifest references an invalid managed ${entry.type}: ${entry.id}`,
         );
       }
-    }
-
-    if (
-      ownership === 'consumer' &&
-      entry.integrity
-    ) {
-      throw new Error(
-        `Consumer-owned context cannot declare integrity: ${entry.type}/${entry.id}`,
-      );
+    } else {
+      // Consumer-owned entries (operations and hybrid types without
+      // integrity) are discovered from filenames, so id and path stay
+      // coupled here. Managed entries are validated against the catalog
+      // above and may decouple id from filename.
+      if (entry.path !== `docs/${directory}/${entry.id}.md`) {
+        throw new Error(
+          `Existing manifest references an invalid consumer-owned ${entry.type}: ${entry.id}`,
+        );
+      }
     }
   }
 
@@ -589,11 +597,20 @@ function buildCatalog(value) {
       if (result.has(id)) {
         throw new Error(`catalog.json contains a duplicate id: ${id}`);
       }
+      const installPath = `docs/${source}`;
+      for (const existing of result.values()) {
+        if (existing.path === installPath) {
+          throw new Error(`catalog.json contains a duplicate path: ${installPath}`);
+        }
+      }
 
+      // IDs are decoupled from filenames (e.g. `devel` lives in
+      // `rules/development.md`). The install destination always follows the
+      // catalog source, never the id.
       result.set(id, {
         type,
         source,
-        path: `docs/${config.directory}/${id}.md`,
+        path: installPath,
       });
     }
   }
@@ -622,8 +639,19 @@ function isContextEntry(entry) {
     return false;
   }
 
+  // Syntactic check only: the path must live under the type directory.
+  // Semantic coupling (id === filename) applies solely to consumer-owned
+  // entries and is enforced in readManifest; managed entries may decouple
+  // id from filename via catalog.json.
   const directory = contextTypes.get(entry.type).directory;
-  return entry.path === `docs/${directory}/${entry.id}.md`;
+  const prefix = `docs/${directory}/`;
+  if (!entry.path.startsWith(prefix) || !entry.path.endsWith('.md')) {
+    return false;
+  }
+  const rest = entry.path.slice(prefix.length);
+  return Boolean(rest) &&
+    !rest.includes('\\') &&
+    !rest.split('/').some((part) => !part || part === '.' || part === '..');
 }
 
 function compareContextEntries(left, right) {

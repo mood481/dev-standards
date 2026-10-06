@@ -7,7 +7,7 @@
   "context": [
     {
       "type": "rule",
-      "id": "development",
+      "id": "devel",
       "path": "docs/rules/development.md",
       "integrity": "sha256:7595d41ab4f88e7dfec9647a0165cc023a6502f05733b0d21fe9914abf9ea254"
     },
@@ -19,7 +19,7 @@
     },
     {
       "type": "operation",
-      "id": "devel",
+      "id": "development",
       "path": "docs/operations/development.md"
     },
     {
