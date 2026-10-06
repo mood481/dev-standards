@@ -25,5 +25,11 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Build docsite
+        run: node scripts/docs/build-docsite.mjs
+
+      - name: Verify site path contract
+        run: node scripts/docs/verify-site-paths.mjs
+
       - name: Inspect package contents
         run: npm pack --dry-run

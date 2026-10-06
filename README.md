@@ -195,4 +195,16 @@ node ./bin/dev-standards.mjs install devel quality --path /tmp/example
 node ./bin/dev-standards.mjs check --path /tmp/example
 ```
 
+### Docs
+
+The docsite sources live in `docs/site/content/` plus the packaged `rules/` and `guides/` rendered through `catalog.json`. Doc coverage runs inside `npm test` (`test/docs.test.mjs`). To inspect the site manually:
+
+```bash
+npm run docs:build
+npm run docs:verify
+npm run docs:serve
+```
+
+`docs:serve` rebuilds with the pipeline defaults and serves the same artifact locally at `http://127.0.0.1:8080/dev-standards/`. Stable release tags (`v<major>.<minor>.<patch>`) publish the built output to `mood481/tools-docs` under `site/dev-standards/`; prerelease tags skip publication.
+
 Profiles, agent-specific adapters, OpenSpec guidance and remote synchronization remain outside the current scope.

@@ -1,0 +1,88 @@
+# dev-standards docsite publication to the tools-docs aggregator.
+#
+# dev-standards owns only its documentation subtree site/dev-standards/. The
+# site-wide deployment belongs to mood481/tools-docs: its own workflow
+# deploys the complete site/ tree when site/** changes on main. This workflow
+# never configures the domain or site-wide deployment.
+#
+# Publication is automatic on stable release tags only (v<major>.<minor>.<patch>
+# with no prerelease suffix). Prerelease tags (alpha, beta, rc, devel) publish
+# the npm package channels but never the docsite. There is no manual dispatch.
+#
+# Cross-repository write uses the fine-grained PAT secret TOOLS_DOCS_TOKEN
+# with only Contents: read/write on mood481/tools-docs. It never uses
+# GITHUB_TOKEN as a cross-repository write substitute. Credentials never enter
+# repository content or logs: the token appears only as the checkout token for
+# the tools-docs repository.
+name: docs-publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out tagged revision
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      - name: Resolve source revision and stable release gate
+        id: source_rev
+        run: |
+          set -eu
+          tag="${GITHUB_REF_NAME:?}"
+          if ! printf '%s' "$tag" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
+            echo "Skipping docsite publication: tag $tag is not a stable release (want v<major>.<minor>.<patch> with no suffix)."
+            echo "stable=false" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          rev="$(git rev-parse HEAD)"
+          echo "dev-standards source revision: $rev ($tag)"
+          echo "rev=$rev" >>"$GITHUB_OUTPUT"
+          echo "stable=true" >>"$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        if: steps.source_rev.outputs.stable == 'true'
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24.20.0
+          package-manager-cache: false
+
+      - name: Build complete docsite
+        if: steps.source_rev.outputs.stable == 'true'
+        run: |
+          set -eu
+          node scripts/docs/build-docsite.mjs
+          test -f dist/docs-site/index.html
+
+      - name: Verify site path contract (no live DNS)
+        if: steps.source_rev.outputs.stable == 'true'
+        run: node scripts/docs/verify-site-paths.mjs
+
+      - name: Check out current tools-docs main
+        if: steps.source_rev.outputs.stable == 'true'
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          repository: mood481/tools-docs
+          ref: main
+          path: tools-docs
+          token: ${{ secrets.TOOLS_DOCS_TOKEN }}
+          fetch-depth: 0
+
+      - name: Publish subtree to tools-docs
+        if: steps.source_rev.outputs.stable == 'true'
+        env:
+          TOOLS_DOCS_TOKEN: ${{ secrets.TOOLS_DOCS_TOKEN }}
+        run: |
+          set -eu
+          : "${TOOLS_DOCS_TOKEN:?TOOLS_DOCS_TOKEN secret is not configured}"
+          sh scripts/docs/publish-to-tools-docs.sh dist/docs-site tools-docs "${{ steps.source_rev.outputs.rev }}" --push
