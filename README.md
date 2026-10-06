@@ -11,7 +11,7 @@ The repository separates:
 
 Repository-specific operational documentation stays in the consuming repository. The installer records existing `docs/operations/*.md` files in the consumer manifest but does not copy or own them.
 
-## Bootstrap catalog
+## Catalog
 
 ### Rules
 
@@ -29,7 +29,7 @@ Repository-specific operational documentation stays in the consuming repository.
 - `go`
 - `nx-pnpm`
 
-## Local bootstrap test
+## Local validation
 
 Requirements: Node.js 22 or newer. The package currently uses only Node.js built-ins.
 
@@ -75,7 +75,7 @@ Existing standard files are never overwritten when their content differs. An exi
 
 ## Testing the package launcher locally
 
-Before the publishing pipeline exists, create a local package archive:
+To test the exact package contents locally, create a package archive:
 
 ```bash
 npm pack
@@ -84,8 +84,8 @@ npm pack
 Then test the same package through either launcher:
 
 ```bash
-pnpm dlx ./mood481-dev-standards-0.1.0.tgz list
-npx --yes ./mood481-dev-standards-0.1.0.tgz list
+pnpm dlx ./mood481-dev-standards-[version].tgz list
+npx --yes ./mood481-dev-standards-[√ersion].tgz list
 ```
 
 Use the same archive with `install ... --path <repo>` to exercise the packaged CLI.
@@ -102,6 +102,14 @@ A consumer manifest is written to `docs/manifest.json`. It records:
 
 Profiles are intentionally outside the v0.1 model.
 
-## v0.1 scope
+## Published devel and pre-release
 
-This bootstrap intentionally does not include publication automation, update/check commands, profile formats, agent-specific adapters, OpenSpec guidance, or remote synchronization. Those will be designed after the first consumer trials.
+Development builds use the `devel` dist-tag; alpha, beta and release-candidate builds use `next`; stable releases use `latest`.
+
+For an alpha adoption, prefer an exact version when reproducibility matters:
+
+```bash
+pnpm dlx @mood481/dev-standards@0.1.1-alpha.1 list
+```
+
+The `@next` channel is convenient for interactive testing but consumers record the exact installed version in `docs/manifest.json`.
