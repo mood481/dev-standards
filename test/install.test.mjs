@@ -81,20 +81,45 @@ test('installs, extends and checks a consumer', async () => {
   );
 
   assert.deepEqual(
-    manifest.rules,
-    ['commits', 'development', 'quality'],
-  );
-  assert.deepEqual(
-    manifest.guides,
-    ['angular', 'typescript-javascript'],
-  );
-  assert.deepEqual(
-    manifest.operations,
-    ['docs/operations/development.md'],
+    manifest.context.map(({ type, id, path }) => ({ type, id, path })),
+    [
+      {
+        type: 'rule',
+        id: 'commits',
+        path: 'docs/rules/commits.md',
+      },
+      {
+        type: 'rule',
+        id: 'development',
+        path: 'docs/rules/development.md',
+      },
+      {
+        type: 'rule',
+        id: 'quality',
+        path: 'docs/rules/quality.md',
+      },
+      {
+        type: 'guide',
+        id: 'angular',
+        path: 'docs/guides/angular.md',
+      },
+      {
+        type: 'guide',
+        id: 'typescript-javascript',
+        path: 'docs/guides/typescript-javascript.md',
+      },
+      {
+        type: 'operation',
+        id: 'development',
+        path: 'docs/operations/development.md',
+      },
+    ],
   );
   assert.equal(manifest.source.version, packageData.version);
   assert.match(
-    manifest.files['docs/rules/development.md'],
+    manifest.context.find(
+      (entry) => entry.path === 'docs/rules/development.md',
+    ).integrity,
     /^sha256:[a-f0-9]{64}$/,
   );
 });
@@ -118,7 +143,43 @@ test('check detects local drift and changed operations', async () => {
   result = run(['check', '--path', target]);
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Local drift detected/);
-  assert.match(result.stderr, /Manifest operations do not match/);
+  assert.match(result.stderr, /Manifest operation context does not match/);
+});
+
+test('preserves and checks context types added by consumers', async () => {
+  const target = await makeTarget();
+
+  let result = run(['install', 'development', '--path', target]);
+  assert.equal(result.status, 0, result.stderr);
+
+  await mkdir(join(target, 'docs', 'architecture'), { recursive: true });
+  await writeFile(
+    join(target, 'docs', 'architecture', 'overview.md'),
+    '# Architecture\n',
+  );
+  const manifestPath = join(target, 'docs', 'manifest.json');
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  manifest.context.push({
+    type: 'architecture',
+    id: 'overview',
+    path: 'docs/architecture/overview.md',
+  });
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  result = run(['install', 'quality', '--path', target]);
+  assert.equal(result.status, 0, result.stderr);
+  result = run(['check', '--path', target]);
+  assert.equal(result.status, 0, result.stderr);
+
+  const updated = JSON.parse(await readFile(manifestPath, 'utf8'));
+  assert.deepEqual(
+    updated.context.find((entry) => entry.type === 'architecture'),
+    {
+      type: 'architecture',
+      id: 'overview',
+      path: 'docs/architecture/overview.md',
+    },
+  );
 });
 
 test('update replaces unchanged installed files and advances version', async () => {

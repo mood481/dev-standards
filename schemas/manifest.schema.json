@@ -7,10 +7,7 @@
   "required": [
     "schemaVersion",
     "source",
-    "rules",
-    "guides",
-    "operations",
-    "files"
+    "context"
   ],
   "properties": {
     "schemaVersion": {
@@ -33,49 +30,108 @@
         }
       }
     },
-    "rules": {
+    "context": {
       "type": "array",
       "uniqueItems": true,
+      "description": "Repository-relative context entries. Each type/id pair and each path must be unique.",
       "items": {
-        "enum": [
-          "development",
-          "quality",
-          "commits",
-          "pull-requests",
-          "triar"
-        ]
+        "$ref": "#/$defs/contextEntry"
       }
-    },
-    "guides": {
-      "type": "array",
-      "uniqueItems": true,
-      "items": {
-        "enum": [
-          "typescript-javascript",
-          "angular",
-          "pocketbase",
-          "go",
-          "nx-pnpm"
-        ]
-      }
-    },
-    "operations": {
-      "type": "array",
-      "uniqueItems": true,
-      "items": {
-        "type": "string",
-        "pattern": "^docs/operations/[^/]+\\.md$"
-      }
-    },
-    "files": {
+    }
+  },
+  "$defs": {
+    "contextEntry": {
       "type": "object",
       "additionalProperties": false,
-      "patternProperties": {
-        "^docs/(rules|guides)/[a-z0-9]+(?:-[a-z0-9]+)*\\.md$": {
+      "required": [
+        "type",
+        "id",
+        "path"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+          "description": "Semantic context type. rule, guide and operation are currently registered; other descriptive types are allowed."
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[^/\\\\\\u0000-\\u001F]+$"
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*//)(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:/|$))(?!.*\\\\)[^\\u0000-\\u001F]+$"
+        },
+        "integrity": {
           "type": "string",
           "pattern": "^sha256:[a-f0-9]{64}$"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "rule"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "integrity"
+            ],
+            "properties": {
+              "path": {
+                "pattern": "^docs/rules/[^/]+\\.md$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "guide"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "integrity"
+            ],
+            "properties": {
+              "path": {
+                "pattern": "^docs/guides/[^/]+\\.md$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "operation"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "path": {
+                "pattern": "^docs/operations/[^/]+\\.md$"
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

@@ -11,6 +11,43 @@ The repository separates:
 
 Repository-specific operational documentation stays in the consuming repository. The CLI records existing `docs/operations/*.md` files in the consumer manifest but does not copy or own them.
 
+## Manifest
+
+`docs/manifest.json` uses schema version `1` and exposes every document as a context entry:
+
+```json
+{
+  "schemaVersion": 1,
+  "source": {
+    "repository": "mood481/dev-standards",
+    "version": "0.2.0-alpha.0"
+  },
+  "context": [
+    {
+      "type": "rule",
+      "id": "development",
+      "path": "docs/rules/development.md",
+      "integrity": "sha256:7595d41ab4f88e7dfec9647a0165cc023a6502f05733b0d21fe9914abf9ea254"
+    },
+    {
+      "type": "operation",
+      "id": "development",
+      "path": "docs/operations/development.md"
+    }
+  ]
+}
+```
+
+The registered context types are:
+
+- `rule` — shared policy installed and integrity-checked by this package.
+- `guide` — shared technology guidance installed and integrity-checked by this package.
+- `operation` — consumer-owned operational documentation indexed by the installer.
+
+The `type` field deliberately accepts other lower-case, kebab-case values so the schema can represent future semantic categories such as `architecture`, `reference` or `runbook`. Prefer a specific type over a generic `other`: readers can safely ignore types they do not understand, while preserving their meaning. Extension entries are preserved by `install` and `update`; `check` verifies that their paths exist and validates `integrity` when supplied.
+
+The schema is published as `schemas/manifest.schema.json`, and a complete package example is available as `schemas/manifest.example.json`. A separate example-install command is unnecessary because every normal `install` already writes a real `docs/manifest.json` for the selected standards and local operations.
+
 ## Catalog
 
 ### Rules
@@ -105,7 +142,7 @@ Validate the installed manifest, selected files and locally indexed operations:
 pnpm dlx @mood481/dev-standards@0.2.0-alpha.0 check
 ```
 
-`check` fails when an installed standard is missing or modified, when the manifest does not match the selection, or when the set of `docs/operations/*.md` files changed without refreshing the manifest. A missing `AGENTS.md` is reported as a warning.
+`check` fails when an installed standard is missing or modified, when the manifest context does not match the selection, when an extension context path is missing or modified according to its optional `integrity`, or when the set of `docs/operations/*.md` files changed without refreshing the manifest. A missing `AGENTS.md` is reported as a warning.
 
 ## Update
 
@@ -117,11 +154,11 @@ pnpm dlx @mood481/dev-standards@next update
 
 The updater:
 
-1. reads the exact installed version and SHA-256 hashes from `docs/manifest.json`;
+1. reads the exact installed version and SHA-256 integrity values from `docs/manifest.json`;
 2. refuses downgrades;
 3. refuses to overwrite any standard whose local content no longer matches its installed hash;
 4. replaces unchanged installed standards with the target package contents;
-5. refreshes hashes, operations and the exact source version in the manifest.
+5. refreshes managed context entries, operations and the exact source version while preserving extension context types.
 
 This makes updates conservative: local divergence is surfaced as a conflict instead of being discarded.
 

@@ -180,7 +180,7 @@ async function install({ repository, ids }) {
     }
   }
 
-  await writeConsumerManifest(repository, selected, plan);
+  await writeConsumerManifest(repository, plan, existingManifest);
   await ensureAgents(repository);
   console.log(`installed\t${repository}`);
 }
@@ -188,22 +188,24 @@ async function install({ repository, ids }) {
 async function check({ repository }) {
   const manifest = await readManifest(repository, { required: true });
   const issues = [];
-  const selected = {
-    rules: manifest.rules,
-    guides: manifest.guides,
-  };
+  const selected = selectionFromManifest(manifest);
   const expectedPaths = selectedPaths(selected);
 
-  const manifestPaths = Object.keys(manifest.files).sort();
+  const managedContexts = manifest.context.filter(
+    (entry) => entry.type === 'rule' || entry.type === 'guide',
+  );
+  const manifestPaths = managedContexts.map((entry) => entry.path).sort();
   if (!sameArray(expectedPaths, manifestPaths)) {
     issues.push(
-      'Manifest files do not match the selected rules/guides.',
+      'Manifest context does not match the selected rules/guides.',
     );
   }
 
   for (const relativePath of expectedPaths) {
     const absolutePath = join(repository, relativePath);
-    const expectedHash = manifest.files[relativePath];
+    const expectedHash = managedContexts.find(
+      (entry) => entry.path === relativePath,
+    )?.integrity;
 
     if (!(await exists(absolutePath))) {
       issues.push(`Missing installed standard: ${relativePath}`);
@@ -218,10 +220,33 @@ async function check({ repository }) {
   }
 
   const operations = await discoverOperations(repository);
-  if (!sameArray(operations, [...manifest.operations].sort())) {
+  const operationPaths = manifest.context
+    .filter((entry) => entry.type === 'operation')
+    .map((entry) => entry.path)
+    .sort();
+  if (!sameArray(operations.map((entry) => entry.path), operationPaths)) {
     issues.push(
-      'Manifest operations do not match docs/operations/*.md.',
+      'Manifest operation context does not match docs/operations/*.md.',
     );
+  }
+
+  for (const entry of manifest.context) {
+    if (entry.type === 'rule' || entry.type === 'guide') {
+      continue;
+    }
+
+    const absolutePath = join(repository, entry.path);
+    if (!(await exists(absolutePath))) {
+      issues.push(`Missing context: ${entry.path}`);
+      continue;
+    }
+
+    if (entry.integrity) {
+      const content = await readFile(absolutePath, 'utf8');
+      if (sha256(content) !== entry.integrity) {
+        issues.push(`Local drift detected: ${entry.path}`);
+      }
+    }
   }
 
   if (!(await exists(join(repository, 'AGENTS.md')))) {
@@ -233,7 +258,7 @@ async function check({ repository }) {
   }
 
   console.log(
-    `ok\t${manifest.source.version}\t${manifest.rules.length} rules\t${manifest.guides.length} guides`,
+    `ok\t${manifest.source.version}\t${selected.rules.length} rules\t${selected.guides.length} guides`,
   );
 }
 
@@ -247,16 +272,16 @@ async function update({ repository }) {
     );
   }
 
-  const selected = {
-    rules: manifest.rules,
-    guides: manifest.guides,
-  };
+  const selected = selectionFromManifest(manifest);
   const expectedPaths = selectedPaths(selected);
-  const manifestPaths = Object.keys(manifest.files).sort();
+  const manifestPaths = manifest.context
+    .filter((entry) => entry.type === 'rule' || entry.type === 'guide')
+    .map((entry) => entry.path)
+    .sort();
 
   if (!sameArray(expectedPaths, manifestPaths)) {
     throw new Error(
-      'Manifest files do not match the selected rules/guides; run check and repair the manifest before updating.',
+      'Manifest context does not match the selected rules/guides; run check and repair the manifest before updating.',
     );
   }
 
@@ -274,7 +299,7 @@ async function update({ repository }) {
     }
   }
 
-  await writeConsumerManifest(repository, selected, plan);
+  await writeConsumerManifest(repository, plan, manifest);
   await ensureAgents(repository);
 
   if (comparison === 0) {
@@ -287,8 +312,12 @@ async function update({ repository }) {
 }
 
 function mergeSelection(manifest, ids) {
-  const rules = new Set(manifest?.rules ?? []);
-  const guides = new Set(manifest?.guides ?? []);
+  const current = manifest ? selectionFromManifest(manifest) : {
+    rules: [],
+    guides: [],
+  };
+  const rules = new Set(current.rules);
+  const guides = new Set(current.guides);
 
   for (const id of ids) {
     const item = catalog.get(id);
@@ -359,7 +388,9 @@ async function planSelectedStandards(repository, selected, options) {
       continue;
     }
 
-    const installedHash = options.manifest.files[relativePath];
+    const installedHash = options.manifest.context.find(
+      (entry) => entry.path === relativePath,
+    )?.integrity;
     if (!installedHash) {
       throw new Error(
         `Manifest does not record an installed hash for ${relativePath}`,
@@ -385,13 +416,26 @@ async function planSelectedStandards(repository, selected, options) {
   return plan.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
 }
 
-async function writeConsumerManifest(repository, selected, plan) {
+async function writeConsumerManifest(
+  repository,
+  plan,
+  existingManifest,
+) {
   const operations = await discoverOperations(repository);
-  const files = Object.fromEntries(
-    plan
-      .map((item) => [item.relativePath, item.hash])
-      .sort(([a], [b]) => a.localeCompare(b)),
-  );
+  const managedContext = plan.map((item) => ({
+    type: catalog.get(item.id).kind.slice(0, -1),
+    id: item.id,
+    path: item.relativePath,
+    integrity: item.hash,
+  }));
+  const extensionContext = existingManifest?.context.filter(
+    (entry) => !['rule', 'guide', 'operation'].includes(entry.type),
+  ) ?? [];
+  const context = [
+    ...managedContext,
+    ...operations,
+    ...extensionContext,
+  ].sort(compareContextEntries);
 
   const manifest = {
     schemaVersion: 1,
@@ -399,10 +443,7 @@ async function writeConsumerManifest(repository, selected, plan) {
       repository: 'mood481/dev-standards',
       version: packageJson.version,
     },
-    rules: [...selected.rules].sort(),
-    guides: [...selected.guides].sort(),
-    operations,
-    files,
+    context,
   };
 
   await writeJson(join(repository, 'docs', 'manifest.json'), manifest);
@@ -433,12 +474,7 @@ async function readManifest(repository, { required }) {
     value?.schemaVersion !== 1 ||
     value?.source?.repository !== 'mood481/dev-standards' ||
     typeof value?.source?.version !== 'string' ||
-    !Array.isArray(value.rules) ||
-    !Array.isArray(value.guides) ||
-    !Array.isArray(value.operations) ||
-    !value.files ||
-    typeof value.files !== 'object' ||
-    Array.isArray(value.files)
+    !Array.isArray(value.context)
   ) {
     throw new Error(
       'Existing docs/manifest.json is not a supported dev-standards schemaVersion 1 manifest.',
@@ -447,21 +483,45 @@ async function readManifest(repository, { required }) {
 
   parseSemver(value.source.version);
 
-  for (const id of [...value.rules, ...value.guides]) {
-    if (!catalog.has(id)) {
+  const contextKeys = new Set();
+  const contextPaths = new Set();
+  for (const entry of value.context) {
+    if (!isContextEntry(entry)) {
       throw new Error(
-        `Existing manifest references unknown standard id: ${id}`,
+        'Existing docs/manifest.json contains an invalid context entry.',
       );
     }
-  }
 
-  for (const [pathName, hash] of Object.entries(value.files)) {
+    const key = `${entry.type}\0${entry.id}`;
+    if (contextKeys.has(key) || contextPaths.has(entry.path)) {
+      throw new Error(
+        `Existing manifest contains duplicate context: ${entry.type}/${entry.id}`,
+      );
+    }
+    contextKeys.add(key);
+    contextPaths.add(entry.path);
+
+    if (entry.type === 'rule' || entry.type === 'guide') {
+      const item = catalog.get(entry.id);
+      const expectedKind = `${entry.type}s`;
+      const expectedPath = `docs/${expectedKind}/${entry.id}.md`;
+      if (
+        item?.kind !== expectedKind ||
+        entry.path !== expectedPath ||
+        !entry.integrity
+      ) {
+        throw new Error(
+          `Existing manifest references an invalid ${entry.type}: ${entry.id}`,
+        );
+      }
+    }
+
     if (
-      !/^docs\/(rules|guides)\/[a-z0-9]+(?:-[a-z0-9]+)*\.md$/.test(pathName) ||
-      !/^sha256:[a-f0-9]{64}$/.test(hash)
+      entry.type === 'operation' &&
+      entry.path !== `docs/operations/${entry.id}.md`
     ) {
       throw new Error(
-        `Existing manifest contains an invalid file record: ${pathName}`,
+        `Existing manifest references an invalid operation: ${entry.id}`,
       );
     }
   }
@@ -476,10 +536,23 @@ async function discoverOperations(repository) {
   }
 
   const entries = await readdir(directory, { withFileTypes: true });
-  return entries
+  const operations = entries
     .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
-    .map((entry) => `docs/operations/${entry.name}`)
-    .sort();
+    .map((entry) => ({
+      type: 'operation',
+      id: entry.name.slice(0, -3),
+      path: `docs/operations/${entry.name}`,
+    }))
+    .sort(compareContextEntries);
+
+  const invalid = operations.find((entry) => !isContextEntry(entry));
+  if (invalid) {
+    throw new Error(
+      `Operation filename cannot be represented in the manifest: ${invalid.path}`,
+    );
+  }
+
+  return operations;
 }
 
 async function ensureAgents(repository) {
@@ -508,6 +581,86 @@ function selectedPaths(selected) {
   }
 
   return paths.sort();
+}
+
+function selectionFromManifest(manifest) {
+  return {
+    rules: manifest.context
+      .filter((entry) => entry.type === 'rule')
+      .map((entry) => entry.id)
+      .sort(),
+    guides: manifest.context
+      .filter((entry) => entry.type === 'guide')
+      .map((entry) => entry.id)
+      .sort(),
+  };
+}
+
+function isContextEntry(entry) {
+  if (
+    !entry ||
+    typeof entry !== 'object' ||
+    Array.isArray(entry) ||
+    typeof entry.type !== 'string' ||
+    !/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(entry.type) ||
+    typeof entry.id !== 'string' ||
+    entry.id.length === 0 ||
+    /[/\\\u0000-\u001F]/.test(entry.id) ||
+    !isRelativeContextPath(entry.path) ||
+    (
+      entry.integrity !== undefined &&
+      !/^sha256:[a-f0-9]{64}$/.test(entry.integrity)
+    ) ||
+    Object.keys(entry).some(
+      (key) => !['type', 'id', 'path', 'integrity'].includes(key),
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    entry.type === 'rule' &&
+    !/^docs\/rules\/[^/]+\.md$/.test(entry.path)
+  ) {
+    return false;
+  }
+  if (
+    entry.type === 'guide' &&
+    !/^docs\/guides\/[^/]+\.md$/.test(entry.path)
+  ) {
+    return false;
+  }
+  if (
+    entry.type === 'operation' &&
+    !/^docs\/operations\/[^/]+\.md$/.test(entry.path)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function isRelativeContextPath(path) {
+  return typeof path === 'string' &&
+    path.length > 0 &&
+    !path.startsWith('/') &&
+    !path.includes('\\\\') &&
+    !path.includes('//') &&
+    !/[\u0000-\u001F]/.test(path) &&
+    !path.split('/').some((part) => part === '.' || part === '..');
+}
+
+function compareContextEntries(left, right) {
+  const typeOrder = new Map([
+    ['rule', 0],
+    ['guide', 1],
+    ['operation', 2],
+  ]);
+  const leftOrder = typeOrder.get(left.type) ?? 3;
+  const rightOrder = typeOrder.get(right.type) ?? 3;
+  return leftOrder - rightOrder ||
+    left.type.localeCompare(right.type) ||
+    left.id.localeCompare(right.id);
 }
 
 function sameArray(left, right) {

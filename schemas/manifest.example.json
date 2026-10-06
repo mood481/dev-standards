@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "repository": "mood481/dev-standards",
+    "version": "0.2.0"
+  },
+  "context": [
+    {
+      "type": "rule",
+      "id": "development",
+      "path": "docs/rules/development.md",
+      "integrity": "sha256:7595d41ab4f88e7dfec9647a0165cc023a6502f05733b0d21fe9914abf9ea254"
+    },
+    {
+      "type": "guide",
+      "id": "typescript-javascript",
+      "path": "docs/guides/typescript-javascript.md",
+      "integrity": "sha256:69b27cb93e76492b6c7409ddeb70df5ab728fc69845ffe5b52e136f68cee8e3c"
+    },
+    {
+      "type": "operation",
+      "id": "development",
+      "path": "docs/operations/development.md"
+    }
+  ]
+}
