@@ -4,7 +4,14 @@
   "title": "Development standards manifest",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "source", "rules", "guides", "operations"],
+  "required": [
+    "schemaVersion",
+    "source",
+    "rules",
+    "guides",
+    "operations",
+    "files"
+  ],
   "properties": {
     "schemaVersion": {
       "const": 1
@@ -12,7 +19,10 @@
     "source": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["repository", "version"],
+      "required": [
+        "repository",
+        "version"
+      ],
       "properties": {
         "repository": {
           "const": "mood481/dev-standards"
@@ -27,14 +37,26 @@
       "type": "array",
       "uniqueItems": true,
       "items": {
-        "enum": ["development", "quality", "commits", "pull-requests", "triar"]
+        "enum": [
+          "development",
+          "quality",
+          "commits",
+          "pull-requests",
+          "triar"
+        ]
       }
     },
     "guides": {
       "type": "array",
       "uniqueItems": true,
       "items": {
-        "enum": ["typescript-javascript", "angular", "pocketbase", "go", "nx-pnpm"]
+        "enum": [
+          "typescript-javascript",
+          "angular",
+          "pocketbase",
+          "go",
+          "nx-pnpm"
+        ]
       }
     },
     "operations": {
@@ -43,6 +65,16 @@
       "items": {
         "type": "string",
         "pattern": "^docs/operations/[^/]+\\.md$"
+      }
+    },
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^docs/(rules|guides)/[a-z0-9]+(?:-[a-z0-9]+)*\\.md$": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
       }
     }
   }

@@ -1,6 +1,6 @@
 {
   "name": "@mood481/dev-standards",
-  "version": "0.1.0",
+  "version": "0.1.0-devel.0",
   "description": "Versioned development rules and implementation guides for mood481 repositories.",
   "type": "module",
   "bin": {
@@ -15,7 +15,8 @@
     "README.md"
   ],
   "scripts": {
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "release:plan": "node tools/release-plan.mjs"
   },
   "engines": {
     "node": ">=22"

@@ -38,7 +38,15 @@ test('installs, merges and preserves a consumer', async () => {
   assert.deepEqual(manifest.rules, ['development', 'quality']);
   assert.deepEqual(manifest.guides, ['typescript-javascript']);
   assert.deepEqual(manifest.operations, ['docs/operations/development.md']);
-  assert.equal(manifest.source.version, '0.1.0');
+  assert.equal(manifest.source.version, '0.1.0-devel.0');
+  assert.match(
+    manifest.files['docs/rules/development.md'],
+    /^sha256:[a-f0-9]{64}$/,
+  );
+  assert.match(
+    manifest.files['docs/guides/typescript-javascript.md'],
+    /^sha256:[a-f0-9]{64}$/,
+  );
 
   result = run(['install', 'commits', 'angular', '--path', target]);
   assert.equal(result.status, 0, result.stderr);

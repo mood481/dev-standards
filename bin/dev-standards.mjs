@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { createHash } from 'node:crypto';
 import { access, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -104,12 +105,15 @@ async function install({ repository, ids }) {
 
   const existingManifest = await readManifest(repository);
   const selected = mergeSelection(existingManifest, ids);
+  const files = {};
 
   for (const id of selected.rules) {
-    await installStandard(repository, id, catalog.get(id));
+    const installed = await installStandard(repository, id, catalog.get(id));
+    files[installed.path] = installed.hash;
   }
   for (const id of selected.guides) {
-    await installStandard(repository, id, catalog.get(id));
+    const installed = await installStandard(repository, id, catalog.get(id));
+    files[installed.path] = installed.hash;
   }
 
   const operations = await discoverOperations(repository);
@@ -122,6 +126,7 @@ async function install({ repository, ids }) {
     rules: selected.rules,
     guides: selected.guides,
     operations,
+    files: Object.fromEntries(Object.entries(files).sort(([a], [b]) => a.localeCompare(b))),
   };
 
   await writeJsonIfSafe(join(repository, 'docs', 'manifest.json'), manifest, {
@@ -158,8 +163,13 @@ function mergeSelection(manifest, ids) {
 
 async function installStandard(repository, id, item) {
   const source = await readFile(join(packageRoot, item.source), 'utf8');
-  const destination = join(repository, 'docs', item.kind, `${id}.md`);
+  const relativePath = `docs/${item.kind}/${id}.md`;
+  const destination = join(repository, relativePath);
   await writeTextIfIdenticalOrMissing(destination, source);
+  return {
+    path: relativePath,
+    hash: sha256(source),
+  };
 }
 
 async function readManifest(repository) {
@@ -236,6 +246,10 @@ async function exists(path) {
   } catch {
     return false;
   }
+}
+
+function sha256(content) {
+  return `sha256:${createHash('sha256').update(content, 'utf8').digest('hex')}`;
 }
 
 function relativeDisplay(path) {
