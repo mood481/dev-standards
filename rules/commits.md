@@ -11,12 +11,17 @@ Keep commit history concise, consistent, machine-readable and useful for review,
 - Common types include `feat`, `fix`, `refactor`, `test`, `docs`, `build`, `ci`, `chore` and `perf`.
 - Breaking changes MUST use Conventional Commits breaking-change notation.
 - The subject MUST concisely describe the outcome and SHOULD use imperative, action-oriented wording.
-- Commit bodies SHOULD be omitted unless they add rationale, constraints, compatibility effects or other information not apparent from the diff.
+- The commit body MUST be omitted when it would only repeat the subject or information already evident in the diff.
+- When present, the body MUST be limited to non-evident motivation, constraints, decisions, compatibility effects or migration notes.
+- The body MUST NOT contain file inventories, low-level change narration, process or agent narration, validation logs, or generated filler text.
+- No numeric length limit is imposed; the constraint is semantic.
 - A commit SHOULD represent one coherent step.
 - Unrelated formatting, cleanup, dependency upgrades or fixes MUST NOT be mixed into a functional commit.
-- Repository-specific traceability trailers MAY be required by a consuming repository or workflow; when present they MUST reflect the work that actually produced the commit.
-- AI provenance metadata is repository policy, not a universal requirement of this standard.
+- Agents that materially create a commit SHOULD add a `Model: <agent> <model> <variant-or-reasoning-effort>` trailer.
+- Trailer values MUST be real and verifiable.
+- When any of the trailer data is missing, the complete trailer is omitted; invented or `unknown` values MUST NOT be written.
+- Trailers are exempt from the restrictions that apply to the explanatory body.
 
 ## Verification
 
-The commit message conforms to Conventional Commits, its subject is concise, and any body or trailers add accurate information rather than noise.
+The commit message conforms to Conventional Commits, its subject is concise, its body is omitted or limited to non-evident rationale without inventories, narration or filler, and any trailers are accurate and complete.
