@@ -35,10 +35,11 @@ test('installs, merges and preserves a consumer', async () => {
 
   const manifestPath = join(target, 'docs', 'manifest.json');
   let manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  let packageData = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
   assert.deepEqual(manifest.rules, ['development', 'quality']);
   assert.deepEqual(manifest.guides, ['typescript-javascript']);
   assert.deepEqual(manifest.operations, ['docs/operations/development.md']);
-  assert.equal(manifest.source.version, '0.1.0-devel.0');
+  assert.equal(manifest.source.version, packageData.version);
   assert.match(
     manifest.files['docs/rules/development.md'],
     /^sha256:[a-f0-9]{64}$/,
