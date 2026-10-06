@@ -143,20 +143,104 @@ test('check detects local drift and changed operations', async () => {
   result = run(['check', '--path', target]);
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Local drift detected/);
-  assert.match(result.stderr, /Manifest operation context does not match/);
+  assert.match(result.stderr, /Manifest consumer-owned context does not match/);
 });
 
-test('preserves and checks context types added by consumers', async () => {
+test('indexes and checks the supported consumer-owned context types', async () => {
   const target = await makeTarget();
+
+  for (const [directory, id] of [
+    ['adrs', 'service-boundaries'],
+    ['runbooks', 'incident-response'],
+    ['references', 'domain-glossary'],
+  ]) {
+    await mkdir(join(target, 'docs', directory), { recursive: true });
+    await writeFile(
+      join(target, 'docs', directory, `${id}.md`),
+      `# ${id}\n`,
+    );
+  }
 
   let result = run(['install', 'development', '--path', target]);
   assert.equal(result.status, 0, result.stderr);
+  const manifestPath = join(target, 'docs', 'manifest.json');
 
-  await mkdir(join(target, 'docs', 'architecture'), { recursive: true });
-  await writeFile(
-    join(target, 'docs', 'architecture', 'overview.md'),
-    '# Architecture\n',
+  result = run(['install', 'quality', '--path', target]);
+  assert.equal(result.status, 0, result.stderr);
+  result = run(['check', '--path', target]);
+  assert.equal(result.status, 0, result.stderr);
+
+  const updated = JSON.parse(await readFile(manifestPath, 'utf8'));
+  assert.deepEqual(
+    updated.context
+      .filter((entry) => ['adr', 'runbook', 'reference'].includes(entry.type))
+      .map(({ type, id, path, integrity }) => ({
+        type,
+        id,
+        path,
+        integrity,
+      })),
+    [
+      {
+        type: 'adr',
+        id: 'service-boundaries',
+        path: 'docs/adrs/service-boundaries.md',
+        integrity: undefined,
+      },
+      {
+        type: 'runbook',
+        id: 'incident-response',
+        path: 'docs/runbooks/incident-response.md',
+        integrity: undefined,
+      },
+      {
+        type: 'reference',
+        id: 'domain-glossary',
+        path: 'docs/references/domain-glossary.md',
+        integrity: undefined,
+      },
+    ],
   );
+});
+
+test('installs hybrid context declared in catalog.json', async () => {
+  const target = await makeTarget();
+  const packageCli = await makeNextPackage(
+    '0.2.0-alpha.0',
+    async (packageRoot) => {
+      await mkdir(join(packageRoot, 'adrs'), { recursive: true });
+      await writeFile(
+        join(packageRoot, 'adrs', 'service-boundaries.md'),
+        '# Shared service boundaries\n',
+      );
+      const catalogPath = join(packageRoot, 'catalog.json');
+      const catalog = JSON.parse(await readFile(catalogPath, 'utf8'));
+      catalog.adr['service-boundaries'] = 'adrs/service-boundaries.md';
+      await writeFile(catalogPath, `${JSON.stringify(catalog, null, 2)}\n`);
+    },
+  );
+
+  let result = run(
+    ['install', 'service-boundaries', '--path', target],
+    packageCli,
+  );
+  assert.equal(result.status, 0, result.stderr);
+  result = run(['check', '--path', target], packageCli);
+  assert.equal(result.status, 0, result.stderr);
+
+  const manifest = JSON.parse(
+    await readFile(join(target, 'docs', 'manifest.json'), 'utf8'),
+  );
+  const adr = manifest.context.find((entry) => entry.type === 'adr');
+  assert.equal(adr.id, 'service-boundaries');
+  assert.match(adr.integrity, /^sha256:[a-f0-9]{64}$/);
+});
+
+test('rejects context types outside the schema vocabulary', async () => {
+  const target = await makeTarget();
+  let result = run(['install', 'development', '--path', target]);
+  assert.equal(result.status, 0, result.stderr);
+
   const manifestPath = join(target, 'docs', 'manifest.json');
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
   manifest.context.push({
@@ -166,20 +250,9 @@ test('preserves and checks context types added by consumers', async () => {
   });
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 
-  result = run(['install', 'quality', '--path', target]);
-  assert.equal(result.status, 0, result.stderr);
   result = run(['check', '--path', target]);
-  assert.equal(result.status, 0, result.stderr);
-
-  const updated = JSON.parse(await readFile(manifestPath, 'utf8'));
-  assert.deepEqual(
-    updated.context.find((entry) => entry.type === 'architecture'),
-    {
-      type: 'architecture',
-      id: 'overview',
-      path: 'docs/architecture/overview.md',
-    },
-  );
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /invalid context entry/);
 });
 
 test('update replaces unchanged installed files and advances version', async () => {

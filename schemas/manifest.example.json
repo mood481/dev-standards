@@ -13,14 +13,29 @@
     },
     {
       "type": "guide",
-      "id": "typescript-javascript",
+      "id": "ts-js",
       "path": "docs/guides/typescript-javascript.md",
       "integrity": "sha256:69b27cb93e76492b6c7409ddeb70df5ab728fc69845ffe5b52e136f68cee8e3c"
     },
     {
       "type": "operation",
-      "id": "development",
+      "id": "devel",
       "path": "docs/operations/development.md"
+    },
+    {
+      "type": "adr",
+      "id": "service-boundaries",
+      "path": "docs/adrs/service-boundaries.md"
+    },
+    {
+      "type": "runbook",
+      "id": "incident-response",
+      "path": "docs/runbooks/incident-response.md"
+    },
+    {
+      "type": "reference",
+      "id": "domain-glossary",
+      "path": "docs/references/domain-glossary.md"
     }
   ]
 }

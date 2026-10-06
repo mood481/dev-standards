@@ -1,0 +1,19 @@
+{
+  "rule": {
+    "devel": "rules/development.md",
+    "quality": "rules/quality.md",
+    "commits": "rules/commits.md",
+    "pull-requests": "rules/pull-requests.md",
+    "triar": "rules/triar.md"
+  },
+  "guide": {
+    "ts-js": "guides/typescript-javascript.md",
+    "angular": "guides/angular.md",
+    "pocketbase": "guides/pocketbase.md",
+    "go": "guides/go.md",
+    "nx-pnpm": "guides/nx-pnpm.md"
+  },
+  "adr": {},
+  "runbook": {},
+  "reference": {}
+}

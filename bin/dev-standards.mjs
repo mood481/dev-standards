@@ -16,19 +16,18 @@ const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const packageJson = JSON.parse(
   await readFile(join(packageRoot, 'package.json'), 'utf8'),
 );
-
-const catalog = new Map([
-  ['development', { kind: 'rules', source: 'rules/development.md' }],
-  ['quality', { kind: 'rules', source: 'rules/quality.md' }],
-  ['commits', { kind: 'rules', source: 'rules/commits.md' }],
-  ['pull-requests', { kind: 'rules', source: 'rules/pull-requests.md' }],
-  ['triar', { kind: 'rules', source: 'rules/triar.md' }],
-  ['typescript-javascript', { kind: 'guides', source: 'guides/typescript-javascript.md' }],
-  ['angular', { kind: 'guides', source: 'guides/angular.md' }],
-  ['pocketbase', { kind: 'guides', source: 'guides/pocketbase.md' }],
-  ['go', { kind: 'guides', source: 'guides/go.md' }],
-  ['nx-pnpm', { kind: 'guides', source: 'guides/nx-pnpm.md' }],
+const contextTypes = new Map([
+  ['rule', { directory: 'rules', ownership: 'managed' }],
+  ['guide', { directory: 'guides', ownership: 'managed' }],
+  ['operation', { directory: 'operations', ownership: 'consumer' }],
+  ['adr', { directory: 'adrs', ownership: 'hybrid' }],
+  ['runbook', { directory: 'runbooks', ownership: 'hybrid' }],
+  ['reference', { directory: 'references', ownership: 'hybrid' }],
 ]);
+const catalogData = JSON.parse(
+  await readFile(join(packageRoot, 'catalog.json'), 'utf8'),
+);
+const catalog = buildCatalog(catalogData);
 
 const exitCode = await main(process.argv.slice(2));
 process.exitCode = exitCode;
@@ -91,7 +90,7 @@ when the installed files still match their recorded hashes.`);
 
 function printCatalog() {
   for (const [id, item] of catalog) {
-    console.log(`${item.kind.slice(0, -1)}\t${id}`);
+    console.log(`${item.type}\t${id}`);
   }
 }
 
@@ -180,7 +179,7 @@ async function install({ repository, ids }) {
     }
   }
 
-  await writeConsumerManifest(repository, plan, existingManifest);
+  await writeConsumerManifest(repository, plan);
   await ensureAgents(repository);
   console.log(`installed\t${repository}`);
 }
@@ -191,13 +190,11 @@ async function check({ repository }) {
   const selected = selectionFromManifest(manifest);
   const expectedPaths = selectedPaths(selected);
 
-  const managedContexts = manifest.context.filter(
-    (entry) => entry.type === 'rule' || entry.type === 'guide',
-  );
+  const managedContexts = manifest.context.filter((entry) => entry.integrity);
   const manifestPaths = managedContexts.map((entry) => entry.path).sort();
   if (!sameArray(expectedPaths, manifestPaths)) {
     issues.push(
-      'Manifest context does not match the selected rules/guides.',
+      'Manifest context does not match the selected managed documents.',
     );
   }
 
@@ -219,34 +216,21 @@ async function check({ repository }) {
     }
   }
 
-  const operations = await discoverOperations(repository);
-  const operationPaths = manifest.context
-    .filter((entry) => entry.type === 'operation')
+  const consumerContext = await discoverConsumerContext(
+    repository,
+    manifestPaths,
+  );
+  const indexedConsumerPaths = manifest.context
+    .filter((entry) => !entry.integrity)
     .map((entry) => entry.path)
     .sort();
-  if (!sameArray(operations.map((entry) => entry.path), operationPaths)) {
+  if (!sameArray(
+    consumerContext.map((entry) => entry.path).sort(),
+    indexedConsumerPaths,
+  )) {
     issues.push(
-      'Manifest operation context does not match docs/operations/*.md.',
+      'Manifest consumer-owned context does not match its docs directories.',
     );
-  }
-
-  for (const entry of manifest.context) {
-    if (entry.type === 'rule' || entry.type === 'guide') {
-      continue;
-    }
-
-    const absolutePath = join(repository, entry.path);
-    if (!(await exists(absolutePath))) {
-      issues.push(`Missing context: ${entry.path}`);
-      continue;
-    }
-
-    if (entry.integrity) {
-      const content = await readFile(absolutePath, 'utf8');
-      if (sha256(content) !== entry.integrity) {
-        issues.push(`Local drift detected: ${entry.path}`);
-      }
-    }
   }
 
   if (!(await exists(join(repository, 'AGENTS.md')))) {
@@ -258,7 +242,7 @@ async function check({ repository }) {
   }
 
   console.log(
-    `ok\t${manifest.source.version}\t${selected.rules.length} rules\t${selected.guides.length} guides`,
+    `ok\t${manifest.source.version}\t${countSelected(selected, 'rule')} rules\t${countSelected(selected, 'guide')} guides`,
   );
 }
 
@@ -275,13 +259,13 @@ async function update({ repository }) {
   const selected = selectionFromManifest(manifest);
   const expectedPaths = selectedPaths(selected);
   const manifestPaths = manifest.context
-    .filter((entry) => entry.type === 'rule' || entry.type === 'guide')
+    .filter((entry) => entry.integrity)
     .map((entry) => entry.path)
     .sort();
 
   if (!sameArray(expectedPaths, manifestPaths)) {
     throw new Error(
-      'Manifest context does not match the selected rules/guides; run check and repair the manifest before updating.',
+      'Manifest context does not match the selected managed documents; run check and repair the manifest before updating.',
     );
   }
 
@@ -299,7 +283,7 @@ async function update({ repository }) {
     }
   }
 
-  await writeConsumerManifest(repository, plan, manifest);
+  await writeConsumerManifest(repository, plan);
   await ensureAgents(repository);
 
   if (comparison === 0) {
@@ -312,40 +296,22 @@ async function update({ repository }) {
 }
 
 function mergeSelection(manifest, ids) {
-  const current = manifest ? selectionFromManifest(manifest) : {
-    rules: [],
-    guides: [],
-  };
-  const rules = new Set(current.rules);
-  const guides = new Set(current.guides);
-
-  for (const id of ids) {
-    const item = catalog.get(id);
-    if (item.kind === 'rules') {
-      rules.add(id);
-    } else {
-      guides.add(id);
-    }
-  }
-
-  return {
-    rules: [...rules].sort(),
-    guides: [...guides].sort(),
-  };
+  const selected = new Set(manifest ? selectionFromManifest(manifest) : []);
+  ids.forEach((id) => selected.add(id));
+  return [...selected].sort();
 }
 
 async function planSelectedStandards(repository, selected, options) {
-  const ids = [...selected.rules, ...selected.guides];
   const plan = [];
 
-  for (const id of ids) {
+  for (const id of selected) {
     const item = catalog.get(id);
     if (!item) {
       throw new Error(`Manifest references unknown standard id: ${id}`);
     }
 
     const content = await readFile(join(packageRoot, item.source), 'utf8');
-    const relativePath = `docs/${item.kind}/${id}.md`;
+    const relativePath = item.path;
     const absolutePath = join(repository, relativePath);
     const nextHash = sha256(content);
 
@@ -419,22 +385,20 @@ async function planSelectedStandards(repository, selected, options) {
 async function writeConsumerManifest(
   repository,
   plan,
-  existingManifest,
 ) {
-  const operations = await discoverOperations(repository);
   const managedContext = plan.map((item) => ({
-    type: catalog.get(item.id).kind.slice(0, -1),
+    type: catalog.get(item.id).type,
     id: item.id,
     path: item.relativePath,
     integrity: item.hash,
   }));
-  const extensionContext = existingManifest?.context.filter(
-    (entry) => !['rule', 'guide', 'operation'].includes(entry.type),
-  ) ?? [];
+  const consumerContext = await discoverConsumerContext(
+    repository,
+    managedContext.map((entry) => entry.path),
+  );
   const context = [
     ...managedContext,
-    ...operations,
-    ...extensionContext,
+    ...consumerContext,
   ].sort(compareContextEntries);
 
   const manifest = {
@@ -501,27 +465,26 @@ async function readManifest(repository, { required }) {
     contextKeys.add(key);
     contextPaths.add(entry.path);
 
-    if (entry.type === 'rule' || entry.type === 'guide') {
-      const item = catalog.get(entry.id);
-      const expectedKind = `${entry.type}s`;
-      const expectedPath = `docs/${expectedKind}/${entry.id}.md`;
+    const item = catalog.get(entry.id);
+    const ownership = contextTypes.get(entry.type).ownership;
+    if (ownership === 'managed' || entry.integrity) {
       if (
-        item?.kind !== expectedKind ||
-        entry.path !== expectedPath ||
+        item?.type !== entry.type ||
+        entry.path !== item.path ||
         !entry.integrity
       ) {
         throw new Error(
-          `Existing manifest references an invalid ${entry.type}: ${entry.id}`,
+          `Existing manifest references an invalid managed ${entry.type}: ${entry.id}`,
         );
       }
     }
 
     if (
-      entry.type === 'operation' &&
-      entry.path !== `docs/operations/${entry.id}.md`
+      ownership === 'consumer' &&
+      entry.integrity
     ) {
       throw new Error(
-        `Existing manifest references an invalid operation: ${entry.id}`,
+        `Consumer-owned context cannot declare integrity: ${entry.type}/${entry.id}`,
       );
     }
   }
@@ -529,30 +492,43 @@ async function readManifest(repository, { required }) {
   return value;
 }
 
-async function discoverOperations(repository) {
-  const directory = join(repository, 'docs', 'operations');
-  if (!(await exists(directory))) {
-    return [];
+async function discoverConsumerContext(repository, excludedPaths = []) {
+  const excluded = new Set(excludedPaths);
+  const context = [];
+
+  for (const [type, config] of contextTypes) {
+    if (config.ownership === 'managed') {
+      continue;
+    }
+
+    const directory = join(repository, 'docs', config.directory);
+    if (!(await exists(directory))) {
+      continue;
+    }
+
+    const entries = await readdir(directory, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith('.md')) {
+        continue;
+      }
+
+      const value = {
+        type,
+        id: entry.name.slice(0, -3),
+        path: `docs/${config.directory}/${entry.name}`,
+      };
+      if (!isContextEntry(value)) {
+        throw new Error(
+          `Context filename cannot be represented in the manifest: ${value.path}`,
+        );
+      }
+      if (!excluded.has(value.path)) {
+        context.push(value);
+      }
+    }
   }
 
-  const entries = await readdir(directory, { withFileTypes: true });
-  const operations = entries
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
-    .map((entry) => ({
-      type: 'operation',
-      id: entry.name.slice(0, -3),
-      path: `docs/operations/${entry.name}`,
-    }))
-    .sort(compareContextEntries);
-
-  const invalid = operations.find((entry) => !isContextEntry(entry));
-  if (invalid) {
-    throw new Error(
-      `Operation filename cannot be represented in the manifest: ${invalid.path}`,
-    );
-  }
-
-  return operations;
+  return context.sort(compareContextEntries);
 }
 
 async function ensureAgents(repository) {
@@ -571,29 +547,58 @@ async function ensureAgents(repository) {
 }
 
 function selectedPaths(selected) {
-  const paths = [];
-
-  for (const id of selected.rules) {
-    paths.push(`docs/rules/${id}.md`);
-  }
-  for (const id of selected.guides) {
-    paths.push(`docs/guides/${id}.md`);
-  }
-
-  return paths.sort();
+  return selected.map((id) => catalog.get(id).path).sort();
 }
 
 function selectionFromManifest(manifest) {
-  return {
-    rules: manifest.context
-      .filter((entry) => entry.type === 'rule')
-      .map((entry) => entry.id)
-      .sort(),
-    guides: manifest.context
-      .filter((entry) => entry.type === 'guide')
-      .map((entry) => entry.id)
-      .sort(),
-  };
+  return manifest.context
+    .filter((entry) => entry.integrity)
+    .map((entry) => entry.id)
+    .sort();
+}
+
+function buildCatalog(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('catalog.json must contain an object keyed by context type.');
+  }
+
+  const result = new Map();
+  for (const [type, entries] of Object.entries(value)) {
+    const config = contextTypes.get(type);
+    if (
+      !config ||
+      config.ownership === 'consumer' ||
+      !entries ||
+      typeof entries !== 'object' ||
+      Array.isArray(entries)
+    ) {
+      throw new Error(`catalog.json contains an invalid context type: ${type}`);
+    }
+
+    for (const [id, source] of Object.entries(entries)) {
+      if (
+        !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id) ||
+        typeof source !== 'string' ||
+        !source.startsWith(`${config.directory}/`) ||
+        !source.endsWith('.md') ||
+        source.includes('\\') ||
+        source.split('/').some((part) => part === '.' || part === '..')
+      ) {
+        throw new Error(`catalog.json contains an invalid ${type}: ${id}`);
+      }
+      if (result.has(id)) {
+        throw new Error(`catalog.json contains a duplicate id: ${id}`);
+      }
+
+      result.set(id, {
+        type,
+        source,
+        path: `docs/${config.directory}/${id}.md`,
+      });
+    }
+  }
+
+  return result;
 }
 
 function isContextEntry(entry) {
@@ -602,11 +607,10 @@ function isContextEntry(entry) {
     typeof entry !== 'object' ||
     Array.isArray(entry) ||
     typeof entry.type !== 'string' ||
-    !/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(entry.type) ||
+    !contextTypes.has(entry.type) ||
     typeof entry.id !== 'string' ||
-    entry.id.length === 0 ||
-    /[/\\\u0000-\u001F]/.test(entry.id) ||
-    !isRelativeContextPath(entry.path) ||
+    !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(entry.id) ||
+    typeof entry.path !== 'string' ||
     (
       entry.integrity !== undefined &&
       !/^sha256:[a-f0-9]{64}$/.test(entry.integrity)
@@ -618,36 +622,8 @@ function isContextEntry(entry) {
     return false;
   }
 
-  if (
-    entry.type === 'rule' &&
-    !/^docs\/rules\/[^/]+\.md$/.test(entry.path)
-  ) {
-    return false;
-  }
-  if (
-    entry.type === 'guide' &&
-    !/^docs\/guides\/[^/]+\.md$/.test(entry.path)
-  ) {
-    return false;
-  }
-  if (
-    entry.type === 'operation' &&
-    !/^docs\/operations\/[^/]+\.md$/.test(entry.path)
-  ) {
-    return false;
-  }
-
-  return true;
-}
-
-function isRelativeContextPath(path) {
-  return typeof path === 'string' &&
-    path.length > 0 &&
-    !path.startsWith('/') &&
-    !path.includes('\\\\') &&
-    !path.includes('//') &&
-    !/[\u0000-\u001F]/.test(path) &&
-    !path.split('/').some((part) => part === '.' || part === '..');
+  const directory = contextTypes.get(entry.type).directory;
+  return entry.path === `docs/${directory}/${entry.id}.md`;
 }
 
 function compareContextEntries(left, right) {
@@ -655,12 +631,19 @@ function compareContextEntries(left, right) {
     ['rule', 0],
     ['guide', 1],
     ['operation', 2],
+    ['adr', 3],
+    ['runbook', 4],
+    ['reference', 5],
   ]);
   const leftOrder = typeOrder.get(left.type) ?? 3;
   const rightOrder = typeOrder.get(right.type) ?? 3;
   return leftOrder - rightOrder ||
     left.type.localeCompare(right.type) ||
     left.id.localeCompare(right.id);
+}
+
+function countSelected(selected, type) {
+  return selected.filter((id) => catalog.get(id).type === type).length;
 }
 
 function sameArray(left, right) {

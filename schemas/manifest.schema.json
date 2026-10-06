@@ -51,12 +51,19 @@
       "properties": {
         "type": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
-          "description": "Semantic context type. rule, guide and operation are currently registered; other descriptive types are allowed."
+          "enum": [
+            "rule",
+            "guide",
+            "operation",
+            "adr",
+            "runbook",
+            "reference"
+          ],
+          "description": "Closed context vocabulary for schema version 1."
         },
         "id": {
           "type": "string",
-          "pattern": "^[^/\\\\\\u0000-\\u001F]+$"
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
         },
         "path": {
           "type": "string",
@@ -64,7 +71,8 @@
         },
         "integrity": {
           "type": "string",
-          "pattern": "^sha256:[a-f0-9]{64}$"
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "description": "Marks package-managed context and records its installed content hash."
         }
       },
       "allOf": [
@@ -85,7 +93,7 @@
             ],
             "properties": {
               "path": {
-                "pattern": "^docs/rules/[^/]+\\.md$"
+                "pattern": "^docs/rules/[a-z0-9]+(?:-[a-z0-9]+)*\\.md$"
               }
             }
           }
@@ -107,7 +115,7 @@
             ],
             "properties": {
               "path": {
-                "pattern": "^docs/guides/[^/]+\\.md$"
+                "pattern": "^docs/guides/[a-z0-9]+(?:-[a-z0-9]+)*\\.md$"
               }
             }
           }
@@ -124,9 +132,71 @@
             ]
           },
           "then": {
+            "not": {
+              "required": [
+                "integrity"
+              ]
+            },
             "properties": {
               "path": {
-                "pattern": "^docs/operations/[^/]+\\.md$"
+                "pattern": "^docs/operations/[a-z0-9]+(?:-[a-z0-9]+)*\\.md$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "adr"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "path": {
+                "pattern": "^docs/adrs/[a-z0-9]+(?:-[a-z0-9]+)*\\.md$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "runbook"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "path": {
+                "pattern": "^docs/runbooks/[a-z0-9]+(?:-[a-z0-9]+)*\\.md$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "reference"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "path": {
+                "pattern": "^docs/references/[a-z0-9]+(?:-[a-z0-9]+)*\\.md$"
               }
             }
           }
