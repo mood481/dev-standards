@@ -1,13 +1,21 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
-import { access, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import {
+  access,
+  mkdir,
+  readFile,
+  readdir,
+  writeFile,
+} from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const packageJson = JSON.parse(await readFile(join(packageRoot, 'package.json'), 'utf8'));
+const packageJson = JSON.parse(
+  await readFile(join(packageRoot, 'package.json'), 'utf8'),
+);
 
 const catalog = new Map([
   ['development', { kind: 'rules', source: 'rules/development.md' }],
@@ -26,26 +34,40 @@ const exitCode = await main(process.argv.slice(2));
 process.exitCode = exitCode;
 
 async function main(args) {
+  if (args[0] === '--version' || args[0] === '-v') {
+    console.log(packageJson.version);
+    return 0;
+  }
+
   const command = args[0];
   if (!command || command === '--help' || command === '-h') {
     printHelp();
     return command ? 0 : 1;
   }
 
-  if (command === 'list') {
-    printCatalog();
-    return 0;
-  }
-
-  if (command === 'install') {
-    try {
-      const options = parseInstall(args.slice(1));
-      await install(options);
+  try {
+    if (command === 'list') {
+      printCatalog();
       return 0;
-    } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
-      return 1;
     }
+
+    if (command === 'install') {
+      await install(parseSelectionCommand(args.slice(1), 'install'));
+      return 0;
+    }
+
+    if (command === 'check') {
+      await check(parseRepositoryCommand(args.slice(1), 'check'));
+      return 0;
+    }
+
+    if (command === 'update') {
+      await update(parseRepositoryCommand(args.slice(1), 'update'));
+      return 0;
+    }
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    return 1;
   }
 
   console.error(`Unknown command: ${command}`);
@@ -57,10 +79,14 @@ function printHelp() {
   console.log(`Usage:
   dev-standards list
   dev-standards install <id> [<id> ...] [--path <repository>]
+  dev-standards check [--path <repository>]
+  dev-standards update [--path <repository>]
+  dev-standards --version
 
-The bootstrap installer copies selected standards into docs/rules and
-docs/guides, writes docs/manifest.json, discovers docs/operations/*.md,
-and creates AGENTS.md only when it does not already exist.`);
+install adds selected standards for the current package version.
+check validates the installed manifest and detects local drift.
+update upgrades every installed standard to the running package version
+when the installed files still match their recorded hashes.`);
 }
 
 function printCatalog() {
@@ -69,11 +95,40 @@ function printCatalog() {
   }
 }
 
-function parseInstall(args) {
+function parseSelectionCommand(args, command) {
+  const parsed = parsePath(args);
+  if (parsed.positionals.length === 0) {
+    throw new Error(`${command} requires at least one standard id`);
+  }
+
+  const unknown = parsed.positionals.filter((id) => !catalog.has(id));
+  if (unknown.length > 0) {
+    throw new Error(`Unknown standard id(s): ${unknown.join(', ')}`);
+  }
+
+  return {
+    repository: parsed.repository,
+    ids: [...new Set(parsed.positionals)],
+  };
+}
+
+function parseRepositoryCommand(args, command) {
+  const parsed = parsePath(args);
+  if (parsed.positionals.length > 0) {
+    throw new Error(
+      `${command} does not accept standard ids; it operates on docs/manifest.json`,
+    );
+  }
+  return { repository: parsed.repository };
+}
+
+function parsePath(args) {
   let path = '.';
-  const ids = [];
+  const positionals = [];
+
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
+
     if (arg === '--path') {
       const value = args[index + 1];
       if (!value || value.startsWith('--')) {
@@ -81,72 +136,160 @@ function parseInstall(args) {
       }
       path = value;
       index += 1;
-    } else if (arg.startsWith('--')) {
-      throw new Error(`Unknown option: ${arg}`);
-    } else {
-      ids.push(arg);
+      continue;
     }
+
+    if (arg.startsWith('--')) {
+      throw new Error(`Unknown option: ${arg}`);
+    }
+
+    positionals.push(arg);
   }
 
-  if (ids.length === 0) {
-    throw new Error('install requires at least one standard id');
-  }
-
-  const unknown = ids.filter((id) => !catalog.has(id));
-  if (unknown.length > 0) {
-    throw new Error(`Unknown standard id(s): ${unknown.join(', ')}`);
-  }
-
-  return { repository: resolve(path), ids: [...new Set(ids)] };
+  return {
+    repository: resolve(path),
+    positionals,
+  };
 }
 
 async function install({ repository, ids }) {
   await mkdir(repository, { recursive: true });
 
-  const existingManifest = await readManifest(repository);
-  const selected = mergeSelection(existingManifest, ids);
-  const files = {};
-
-  for (const id of selected.rules) {
-    const installed = await installStandard(repository, id, catalog.get(id));
-    files[installed.path] = installed.hash;
+  const existingManifest = await readManifest(repository, { required: false });
+  if (
+    existingManifest &&
+    existingManifest.source.version !== packageJson.version
+  ) {
+    throw new Error(
+      `Installed standards are ${existingManifest.source.version}; run dev-standards update with ${packageJson.version} before adding standards from this version.`,
+    );
   }
-  for (const id of selected.guides) {
-    const installed = await installStandard(repository, id, catalog.get(id));
-    files[installed.path] = installed.hash;
+
+  const selected = mergeSelection(existingManifest, ids);
+  const plan = await planSelectedStandards(repository, selected, {
+    mode: 'install',
+    manifest: existingManifest,
+  });
+
+  for (const item of plan) {
+    if (item.action === 'create') {
+      await writeText(item.absolutePath, item.content);
+      console.log(`create\t${item.relativePath}`);
+    } else {
+      console.log(`unchanged\t${item.relativePath}`);
+    }
+  }
+
+  await writeConsumerManifest(repository, selected, plan);
+  await ensureAgents(repository);
+  console.log(`installed\t${repository}`);
+}
+
+async function check({ repository }) {
+  const manifest = await readManifest(repository, { required: true });
+  const issues = [];
+  const selected = {
+    rules: manifest.rules,
+    guides: manifest.guides,
+  };
+  const expectedPaths = selectedPaths(selected);
+
+  const manifestPaths = Object.keys(manifest.files).sort();
+  if (!sameArray(expectedPaths, manifestPaths)) {
+    issues.push(
+      'Manifest files do not match the selected rules/guides.',
+    );
+  }
+
+  for (const relativePath of expectedPaths) {
+    const absolutePath = join(repository, relativePath);
+    const expectedHash = manifest.files[relativePath];
+
+    if (!(await exists(absolutePath))) {
+      issues.push(`Missing installed standard: ${relativePath}`);
+      continue;
+    }
+
+    const content = await readFile(absolutePath, 'utf8');
+    const actualHash = sha256(content);
+    if (actualHash !== expectedHash) {
+      issues.push(`Local drift detected: ${relativePath}`);
+    }
   }
 
   const operations = await discoverOperations(repository);
-  const manifest = {
-    schemaVersion: 1,
-    source: {
-      repository: 'mood481/dev-standards',
-      version: packageJson.version,
-    },
-    rules: selected.rules,
-    guides: selected.guides,
-    operations,
-    files: Object.fromEntries(Object.entries(files).sort(([a], [b]) => a.localeCompare(b))),
-  };
-
-  await writeJsonIfSafe(join(repository, 'docs', 'manifest.json'), manifest, {
-    allowManifestUpdate: true,
-  });
-
-  const agentsSource = await readFile(join(packageRoot, 'templates', 'AGENTS.md'), 'utf8');
-  const agentsPath = join(repository, 'AGENTS.md');
-  if (!(await exists(agentsPath))) {
-    await writeText(agentsPath, agentsSource);
-  } else {
-    console.log('preserve\tAGENTS.md');
+  if (!sameArray(operations, [...manifest.operations].sort())) {
+    issues.push(
+      'Manifest operations do not match docs/operations/*.md.',
+    );
   }
 
-  console.log(`installed\t${repository}`);
+  if (!(await exists(join(repository, 'AGENTS.md')))) {
+    console.log('warning\tAGENTS.md is missing');
+  }
+
+  if (issues.length > 0) {
+    throw new Error(issues.join('\n'));
+  }
+
+  console.log(
+    `ok\t${manifest.source.version}\t${manifest.rules.length} rules\t${manifest.guides.length} guides`,
+  );
+}
+
+async function update({ repository }) {
+  const manifest = await readManifest(repository, { required: true });
+  const comparison = compareSemver(packageJson.version, manifest.source.version);
+
+  if (comparison < 0) {
+    throw new Error(
+      `Refusing to downgrade standards from ${manifest.source.version} to ${packageJson.version}.`,
+    );
+  }
+
+  const selected = {
+    rules: manifest.rules,
+    guides: manifest.guides,
+  };
+  const expectedPaths = selectedPaths(selected);
+  const manifestPaths = Object.keys(manifest.files).sort();
+
+  if (!sameArray(expectedPaths, manifestPaths)) {
+    throw new Error(
+      'Manifest files do not match the selected rules/guides; run check and repair the manifest before updating.',
+    );
+  }
+
+  const plan = await planSelectedStandards(repository, selected, {
+    mode: 'update',
+    manifest,
+  });
+
+  for (const item of plan) {
+    if (item.action === 'update') {
+      await writeText(item.absolutePath, item.content);
+      console.log(`update\t${item.relativePath}`);
+    } else {
+      console.log(`unchanged\t${item.relativePath}`);
+    }
+  }
+
+  await writeConsumerManifest(repository, selected, plan);
+  await ensureAgents(repository);
+
+  if (comparison === 0) {
+    console.log(`current\t${packageJson.version}`);
+  } else {
+    console.log(
+      `updated\t${manifest.source.version}\t->\t${packageJson.version}`,
+    );
+  }
 }
 
 function mergeSelection(manifest, ids) {
   const rules = new Set(manifest?.rules ?? []);
   const guides = new Set(manifest?.guides ?? []);
+
   for (const id of ids) {
     const item = catalog.get(id);
     if (item.kind === 'rules') {
@@ -155,26 +298,125 @@ function mergeSelection(manifest, ids) {
       guides.add(id);
     }
   }
+
   return {
     rules: [...rules].sort(),
     guides: [...guides].sort(),
   };
 }
 
-async function installStandard(repository, id, item) {
-  const source = await readFile(join(packageRoot, item.source), 'utf8');
-  const relativePath = `docs/${item.kind}/${id}.md`;
-  const destination = join(repository, relativePath);
-  await writeTextIfIdenticalOrMissing(destination, source);
-  return {
-    path: relativePath,
-    hash: sha256(source),
-  };
+async function planSelectedStandards(repository, selected, options) {
+  const ids = [...selected.rules, ...selected.guides];
+  const plan = [];
+
+  for (const id of ids) {
+    const item = catalog.get(id);
+    if (!item) {
+      throw new Error(`Manifest references unknown standard id: ${id}`);
+    }
+
+    const content = await readFile(join(packageRoot, item.source), 'utf8');
+    const relativePath = `docs/${item.kind}/${id}.md`;
+    const absolutePath = join(repository, relativePath);
+    const nextHash = sha256(content);
+
+    if (!(await exists(absolutePath))) {
+      if (options.mode === 'update') {
+        throw new Error(
+          `Cannot update because an installed standard is missing: ${relativePath}`,
+        );
+      }
+
+      plan.push({
+        id,
+        relativePath,
+        absolutePath,
+        content,
+        hash: nextHash,
+        action: 'create',
+      });
+      continue;
+    }
+
+    const current = await readFile(absolutePath, 'utf8');
+    const currentHash = sha256(current);
+
+    if (options.mode === 'install') {
+      if (currentHash !== nextHash) {
+        throw new Error(
+          `Refusing to overwrite divergent file: ${relativePath}`,
+        );
+      }
+
+      plan.push({
+        id,
+        relativePath,
+        absolutePath,
+        content,
+        hash: nextHash,
+        action: 'unchanged',
+      });
+      continue;
+    }
+
+    const installedHash = options.manifest.files[relativePath];
+    if (!installedHash) {
+      throw new Error(
+        `Manifest does not record an installed hash for ${relativePath}`,
+      );
+    }
+
+    if (currentHash !== installedHash) {
+      throw new Error(
+        `Refusing to overwrite locally modified file: ${relativePath}`,
+      );
+    }
+
+    plan.push({
+      id,
+      relativePath,
+      absolutePath,
+      content,
+      hash: nextHash,
+      action: currentHash === nextHash ? 'unchanged' : 'update',
+    });
+  }
+
+  return plan.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
 }
 
-async function readManifest(repository) {
+async function writeConsumerManifest(repository, selected, plan) {
+  const operations = await discoverOperations(repository);
+  const files = Object.fromEntries(
+    plan
+      .map((item) => [item.relativePath, item.hash])
+      .sort(([a], [b]) => a.localeCompare(b)),
+  );
+
+  const manifest = {
+    schemaVersion: 1,
+    source: {
+      repository: 'mood481/dev-standards',
+      version: packageJson.version,
+    },
+    rules: [...selected.rules].sort(),
+    guides: [...selected.guides].sort(),
+    operations,
+    files,
+  };
+
+  await writeJson(join(repository, 'docs', 'manifest.json'), manifest);
+  console.log('write\tdocs/manifest.json');
+}
+
+async function readManifest(repository, { required }) {
   const path = join(repository, 'docs', 'manifest.json');
   if (!(await exists(path))) {
+    if (required) {
+      throw new Error(
+        'docs/manifest.json was not found; install standards before using this command.',
+      );
+    }
     return undefined;
   }
 
@@ -182,20 +424,45 @@ async function readManifest(repository) {
   try {
     value = JSON.parse(await readFile(path, 'utf8'));
   } catch (error) {
-    throw new Error(`Cannot parse existing docs/manifest.json: ${error.message}`);
+    throw new Error(
+      `Cannot parse existing docs/manifest.json: ${error.message}`,
+    );
   }
 
   if (
     value?.schemaVersion !== 1 ||
+    value?.source?.repository !== 'mood481/dev-standards' ||
+    typeof value?.source?.version !== 'string' ||
     !Array.isArray(value.rules) ||
-    !Array.isArray(value.guides)
+    !Array.isArray(value.guides) ||
+    !Array.isArray(value.operations) ||
+    !value.files ||
+    typeof value.files !== 'object' ||
+    Array.isArray(value.files)
   ) {
-    throw new Error('Existing docs/manifest.json is not a supported schemaVersion 1 manifest');
+    throw new Error(
+      'Existing docs/manifest.json is not a supported dev-standards schemaVersion 1 manifest.',
+    );
   }
+
+  parseSemver(value.source.version);
 
   for (const id of [...value.rules, ...value.guides]) {
     if (!catalog.has(id)) {
-      throw new Error(`Existing manifest references unknown standard id: ${id}`);
+      throw new Error(
+        `Existing manifest references unknown standard id: ${id}`,
+      );
+    }
+  }
+
+  for (const [pathName, hash] of Object.entries(value.files)) {
+    if (
+      !/^docs\/(rules|guides)\/[a-z0-9]+(?:-[a-z0-9]+)*\.md$/.test(pathName) ||
+      !/^sha256:[a-f0-9]{64}$/.test(hash)
+    ) {
+      throw new Error(
+        `Existing manifest contains an invalid file record: ${pathName}`,
+      );
     }
   }
 
@@ -215,23 +482,106 @@ async function discoverOperations(repository) {
     .sort();
 }
 
-async function writeTextIfIdenticalOrMissing(path, content) {
-  if (await exists(path)) {
-    const current = await readFile(path, 'utf8');
-    if (current !== content) {
-      throw new Error(`Refusing to overwrite divergent file: ${relativeDisplay(path)}`);
-    }
-    console.log(`unchanged\t${relativeDisplay(path)}`);
+async function ensureAgents(repository) {
+  const agentsPath = join(repository, 'AGENTS.md');
+  if (await exists(agentsPath)) {
+    console.log('preserve\tAGENTS.md');
     return;
   }
-  await writeText(path, content);
-  console.log(`create\t${relativeDisplay(path)}`);
+
+  const source = await readFile(
+    join(packageRoot, 'templates', 'AGENTS.md'),
+    'utf8',
+  );
+  await writeText(agentsPath, source);
+  console.log('create\tAGENTS.md');
 }
 
-async function writeJsonIfSafe(path, value) {
-  const content = `${JSON.stringify(value, null, 2)}\n`;
-  await writeText(path, content);
-  console.log(`write\t${relativeDisplay(path)}`);
+function selectedPaths(selected) {
+  const paths = [];
+
+  for (const id of selected.rules) {
+    paths.push(`docs/rules/${id}.md`);
+  }
+  for (const id of selected.guides) {
+    paths.push(`docs/guides/${id}.md`);
+  }
+
+  return paths.sort();
+}
+
+function sameArray(left, right) {
+  return left.length === right.length &&
+    left.every((value, index) => value === right[index]);
+}
+
+function parseSemver(version) {
+  const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(version);
+  if (!match) {
+    throw new Error(`Invalid SemVer version: ${version}`);
+  }
+
+  return {
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3]),
+    prerelease: match[4]?.split('.') ?? [],
+  };
+}
+
+function compareSemver(leftVersion, rightVersion) {
+  const left = parseSemver(leftVersion);
+  const right = parseSemver(rightVersion);
+
+  for (const key of ['major', 'minor', 'patch']) {
+    if (left[key] !== right[key]) {
+      return left[key] > right[key] ? 1 : -1;
+    }
+  }
+
+  if (left.prerelease.length === 0 && right.prerelease.length === 0) {
+    return 0;
+  }
+  if (left.prerelease.length === 0) {
+    return 1;
+  }
+  if (right.prerelease.length === 0) {
+    return -1;
+  }
+
+  const length = Math.max(left.prerelease.length, right.prerelease.length);
+  for (let index = 0; index < length; index += 1) {
+    const a = left.prerelease[index];
+    const b = right.prerelease[index];
+
+    if (a === undefined) {
+      return -1;
+    }
+    if (b === undefined) {
+      return 1;
+    }
+    if (a === b) {
+      continue;
+    }
+
+    const aNumeric = /^\d+$/.test(a);
+    const bNumeric = /^\d+$/.test(b);
+
+    if (aNumeric && bNumeric) {
+      return Number(a) > Number(b) ? 1 : -1;
+    }
+    if (aNumeric !== bNumeric) {
+      return aNumeric ? -1 : 1;
+    }
+
+    return a > b ? 1 : -1;
+  }
+
+  return 0;
+}
+
+async function writeJson(path, value) {
+  await writeText(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 async function writeText(path, content) {
@@ -250,8 +600,4 @@ async function exists(path) {
 
 function sha256(content) {
   return `sha256:${createHash('sha256').update(content, 'utf8').digest('hex')}`;
-}
-
-function relativeDisplay(path) {
-  return path.replace(process.cwd() + '/', '');
 }

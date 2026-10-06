@@ -1,6 +1,6 @@
 {
   "name": "@mood481/dev-standards",
-  "version": "0.1.1-alpha.1",
+  "version": "0.2.0-alpha.0",
   "description": "Versioned development rules and implementation guides for mood481 repositories.",
   "type": "module",
   "bin": {
