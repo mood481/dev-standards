@@ -11,7 +11,7 @@ const allowedPrereleaseChannels = new Map([
 ]);
 
 export function parseVersion(version) {
-  const match = /^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-(devel|alpha|beta|rc)\\.(0|[1-9]\\d*))?$/.exec(version);
+  const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(devel|alpha|beta|rc)\.(0|[1-9]\d*))?$/.exec(version);
   if (!match) {
     throw new Error(
       `Unsupported package version: ${version}. Use x.y.z or x.y.z-{devel|alpha|beta|rc}.N.`,
@@ -60,7 +60,7 @@ async function run() {
   if (process.env.GITHUB_OUTPUT) {
     await appendFile(
       process.env.GITHUB_OUTPUT,
-      `version=${plan.version}\\ndist_tag=${plan.distTag}\\n`,
+      `version=${plan.version}\ndist_tag=${plan.distTag}\n`,
       'utf8',
     );
   }
