@@ -6,6 +6,7 @@ import test from 'node:test';
 import {
   catalogLookup,
   compareContextEntries,
+  installPathFor,
   loadCatalog,
   makeNextPackage,
   makeTarget,
@@ -111,6 +112,34 @@ test('installs hybrid context declared in catalog.json', async () => {
   assert.equal(adr.id, 'service-boundaries');
   assert.equal(adr.path, 'docs/adrs/service-boundaries.md');
   assert.match(adr.integrity, /^sha256:[a-f0-9]{64}$/);
+});
+
+test('installs the lit guide with integrity and passes check', async () => {
+  const catalog = await loadCatalog();
+  assert.ok(catalog.guide?.lit, 'catalog must register the lit guide');
+  const installPath = installPathFor(catalog, 'lit');
+
+  const listed = run(['list']);
+  assert.equal(listed.status, 0, listed.stderr);
+  assert.match(listed.stdout, /^guide\tlit$/m);
+
+  const target = await makeTarget();
+  let result = run(['install', 'lit', '--path', target]);
+  assert.equal(result.status, 0, result.stderr);
+  result = run(['check', '--path', target]);
+  assert.equal(result.status, 0, result.stderr);
+
+  const manifest = await readConsumerManifest(target);
+  const entry = manifest.context.find(({ id }) => id === 'lit');
+  assert.equal(entry.type, 'guide');
+  assert.equal(entry.path, installPath);
+  assert.match(entry.integrity, /^sha256:[a-f0-9]{64}$/);
+
+  const [directory, ...rest] = installPath.split('/');
+  assert.match(
+    await readFile(join(target, directory, ...rest), 'utf8'),
+    /^# Lit guide$/m,
+  );
 });
 
 test('install requires update before mixing package versions', async () => {

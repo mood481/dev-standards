@@ -11,7 +11,8 @@
     "angular": "guides/angular.md",
     "pocketbase": "guides/pocketbase.md",
     "go": "guides/go.md",
-    "nx-pnpm": "guides/nx-pnpm.md"
+    "nx-pnpm": "guides/nx-pnpm.md",
+    "lit": "guides/lit-web-components.md"
   },
   "adr": {},
   "runbook": {},

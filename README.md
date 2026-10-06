@@ -70,6 +70,7 @@ The schema is published as `schemas/manifest.schema.json`, and a complete packag
 - `pocketbase`
 - `go`
 - `nx-pnpm`
+- `lit`
 
 ## Registry setup
 
