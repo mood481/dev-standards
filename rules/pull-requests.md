@@ -44,6 +44,14 @@ Additional sections SHOULD be added only when useful, including validation, cont
 - Out-of-scope review findings SHOULD normally become follow-up work.
 - A pull request is ready to merge only when its base is correct, dependencies are represented accurately, scope matches the changed code, mandatory validation passes and correctness/scope review feedback is resolved.
 
+## Merge strategy
+
+- The preferred integration is a merge commit, preserving the reviewed commits plus the integration decision as an additional commit.
+- Rebase-and-merge is permitted when a deliberately linear history is wanted and the commits are coherent.
+- Squash is not the usual option.
+- Automation MUST NOT squash or rewrite the commit structure during the merge.
+- A manual squash is only an explicit human decision, never the default behavior.
+
 ## Automation
 
-Repositories MAY enforce objective parts of this policy in CI. Automation MUST NOT replace architectural judgment with fragile heuristics.
+Repositories MAY enforce objective parts of this policy in CI. Automation MUST NOT replace architectural judgment with fragile heuristics. Merge automation MUST expose the strategy it applies so reviewers can confirm it matches the merge strategy above.
