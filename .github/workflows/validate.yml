@@ -25,6 +25,9 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Check catalog consistency
+        run: npm run catalog:check
+
       - name: Build docsite
         run: node scripts/docs/build-docsite.mjs
 
