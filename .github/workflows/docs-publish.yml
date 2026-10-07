@@ -6,8 +6,10 @@
 # never configures the domain or site-wide deployment.
 #
 # Publication is automatic on stable release tags only (v<major>.<minor>.<patch>
-# with no prerelease suffix). Prerelease tags (alpha, beta, rc, devel) publish
-# the npm package channels but never the docsite. There is no manual dispatch.
+# with no prerelease suffix) whose commit is contained in origin/main.
+# Prerelease tags (alpha, beta, rc, devel) publish the npm package channels
+# but never the docsite. Tags outside main fail visibly instead of publishing.
+# There is no manual dispatch.
 #
 # Cross-repository write uses the fine-grained PAT secret TOOLS_DOCS_TOKEN
 # with only Contents: read/write on mood481/tools-docs. It never uses
@@ -49,6 +51,18 @@ jobs:
           echo "dev-standards source revision: $rev ($tag)"
           echo "rev=$rev" >>"$GITHUB_OUTPUT"
           echo "stable=true" >>"$GITHUB_OUTPUT"
+
+      - name: Ensure tagged commit is on main
+        if: steps.source_rev.outputs.stable == 'true'
+        run: |
+          set -eu
+          git fetch origin main
+          if git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD; then
+            echo "tagged commit $GITHUB_SHA is contained in origin/main"
+          else
+            echo "error: tagged commit $GITHUB_SHA is not contained in origin/main; refusing to publish the docsite" >&2
+            exit 1
+          fi
 
       - name: Set up Node.js
         if: steps.source_rev.outputs.stable == 'true'
