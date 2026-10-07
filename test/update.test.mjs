@@ -24,7 +24,7 @@ test('update replaces unchanged installed files and advances version', async () 
   let result = run(['install', managedId, '--path', target]);
   assert.equal(result.status, 0, result.stderr);
 
-  const nextCli = await makeNextPackage('0.2.1-alpha.0', async (packageRoot) => {
+  const nextCli = await makeNextPackage('0.3.1-alpha.0', async (packageRoot) => {
     const path = join(packageRoot, source);
     const content = await readFile(path, 'utf8');
     await writeFile(path, `${content}\n<!-- next-version-test -->\n`);
@@ -42,7 +42,7 @@ test('update replaces unchanged installed files and advances version', async () 
   assert.match(installed, /next-version-test/);
 
   const manifest = await readConsumerManifest(target);
-  assert.equal(manifest.source.version, '0.2.1-alpha.0');
+  assert.equal(manifest.source.version, '0.3.1-alpha.0');
 });
 
 test('update refuses to overwrite locally modified standards', async () => {
@@ -59,7 +59,7 @@ test('update refuses to overwrite locally modified standards', async () => {
   const installedPath = join(target, directory, ...rest);
   await writeFile(installedPath, '# Local divergent version\n');
 
-  const nextCli = await makeNextPackage('0.2.1-alpha.0', async (packageRoot) => {
+  const nextCli = await makeNextPackage('0.3.1-alpha.0', async (packageRoot) => {
     const path = join(packageRoot, source);
     const content = await readFile(path, 'utf8');
     await writeFile(path, `${content}\n<!-- next-version-test -->\n`);

@@ -1,6 +1,6 @@
 {
   "name": "@mood481/dev-standards",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Versioned development rules and implementation guides for mood481 repositories.",
   "type": "module",
   "bin": {
@@ -21,6 +21,7 @@
   "scripts": {
     "test": "node --test test/*.test.mjs",
     "release:plan": "node tools/release-plan.mjs",
+    "catalog:check": "node tools/catalog-check.mjs",
     "docs:build": "node scripts/docs/build-docsite.mjs",
     "docs:verify": "node scripts/docs/verify-site-paths.mjs",
     "docs:serve": "node scripts/docs/serve-local.mjs"
