@@ -1,9 +1,20 @@
 name: Publish package
 
+# Two channels, both tag-driven:
+# - prerelease tags (v<core>-<channel>.N) publish the npm channels on push;
+# - stable tags (v<core>) publish latest only through their GitHub release.
+# The published version always comes from the tag. package.json holds the
+# release line (e.g. 0.2.0) and the workflow stamps it to the tag version
+# before testing and publishing, so prereleases never require a
+# package.json bump. A stable release also advances the `next` tag to the
+# stable version when it lags behind, so `next` is never older than `latest`.
+
 on:
   push:
     tags:
       - 'v*'
+  release:
+    types: [published]
 
 permissions:
   contents: read
@@ -15,8 +26,41 @@ jobs:
     steps:
       - name: Check out release source
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      - name: Determine release ref
+        id: ref
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "name=${{ github.event.release.tag_name }}" >>"$GITHUB_OUTPUT"
+          else
+            echo "name=${{ github.ref_name }}" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Gate release channel
+        id: gate
+        run: |
+          set -eu
+          name="${{ steps.ref.outputs.name }}"
+          stable='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+          if [ "${{ github.event_name }}" = "release" ]; then
+            if printf '%s' "$name" | grep -Eq "$stable"; then
+              echo "publish=true" >>"$GITHUB_OUTPUT"
+            else
+              echo "GitHub release on prerelease tag $name was already published by its tag push; skipping."
+              echo "publish=false" >>"$GITHUB_OUTPUT"
+            fi
+          elif printf '%s' "$name" | grep -Eq "$stable"; then
+            echo "Stable tag $name publishes through its GitHub release; skipping tag-push publication."
+            echo "publish=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >>"$GITHUB_OUTPUT"
+          fi
 
       - name: Validate registry configuration
+        if: steps.gate.outputs.publish == 'true'
         env:
           GITEA_NPM_REGISTRY: ${{ vars.GITEA_NPM_REGISTRY || secrets.GITEA_NPM_REGISTRY }}
         shell: bash
@@ -35,6 +79,7 @@ jobs:
           esac
 
       - name: Set up Node.js
+        if: steps.gate.outputs.publish == 'true'
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 24.20.0
@@ -44,20 +89,30 @@ jobs:
 
       - name: Resolve release plan
         id: release
+        if: steps.gate.outputs.publish == 'true'
         env:
-          GITHUB_REF_NAME: ${{ github.ref_name }}
-          GITHUB_REF_TYPE: ${{ github.ref_type }}
-        run: npm run release:plan
+          GITHUB_REF_NAME: ${{ steps.ref.outputs.name }}
+          GITHUB_REF_TYPE: tag
+        run: npm run release:plan -- --stamp
 
       - name: Validate package
+        if: steps.gate.outputs.publish == 'true'
         run: npm test
 
       - name: Inspect package contents
+        if: steps.gate.outputs.publish == 'true'
         run: npm pack --dry-run
 
       - name: Publish package
+        if: steps.gate.outputs.publish == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITEA_TOKEN }}
           GITEA_NPM_REGISTRY: ${{ vars.GITEA_NPM_REGISTRY || secrets.GITEA_NPM_REGISTRY }}
           DIST_TAG: ${{ steps.release.outputs.dist_tag }}
         run: npm publish --registry "$GITEA_NPM_REGISTRY" --tag "$DIST_TAG"
+
+      - name: Advance next channel when behind stable
+        if: steps.gate.outputs.publish == 'true' && github.event_name == 'release'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITEA_TOKEN }}
+        run: node tools/advance-next.mjs --apply

@@ -22,6 +22,7 @@
     "test": "node --test test/*.test.mjs",
     "release:plan": "node tools/release-plan.mjs",
     "catalog:check": "node tools/catalog-check.mjs",
+    "dist:next": "node tools/advance-next.mjs",
     "docs:build": "node scripts/docs/build-docsite.mjs",
     "docs:verify": "node scripts/docs/verify-site-paths.mjs",
     "docs:serve": "node scripts/docs/serve-local.mjs"

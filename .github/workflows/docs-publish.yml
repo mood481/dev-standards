@@ -5,11 +5,11 @@
 # deploys the complete site/ tree when site/** changes on main. This workflow
 # never configures the domain or site-wide deployment.
 #
-# Publication is automatic on stable release tags only (v<major>.<minor>.<patch>
-# with no prerelease suffix) whose commit is contained in origin/main.
-# Prerelease tags (alpha, beta, rc, devel) publish the npm package channels
-# but never the docsite. Tags outside main fail visibly instead of publishing.
-# There is no manual dispatch.
+# Publication happens when the stable GitHub release is published
+# (v<major>.<minor>.<patch> with no prerelease suffix). Releases are cut from
+# main (default branch), so the release event itself is the main-line signal
+# and no extra containment check is needed. Prerelease tags publish the npm
+# channels on push but never the docsite. There is no manual dispatch.
 #
 # Cross-repository write uses the fine-grained PAT secret TOOLS_DOCS_TOKEN
 # with only Contents: read/write on mood481/tools-docs. It never uses
@@ -19,9 +19,8 @@
 name: docs-publish
 
 on:
-  push:
-    tags:
-      - 'v*'
+  release:
+    types: [published]
 
 permissions:
   contents: read
@@ -31,19 +30,19 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - name: Check out tagged revision
+      - name: Check out released revision
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ github.event.release.tag_name }}
           fetch-depth: 0
 
       - name: Resolve source revision and stable release gate
         id: source_rev
         run: |
           set -eu
-          tag="${GITHUB_REF_NAME:?}"
+          tag="${{ github.event.release.tag_name }}"
           if ! printf '%s' "$tag" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
-            echo "Skipping docsite publication: tag $tag is not a stable release (want v<major>.<minor>.<patch> with no suffix)."
+            echo "Skipping docsite publication: release $tag is not a stable release (want v<major>.<minor>.<patch> with no suffix)."
             echo "stable=false" >>"$GITHUB_OUTPUT"
             exit 0
           fi
@@ -52,24 +51,19 @@ jobs:
           echo "rev=$rev" >>"$GITHUB_OUTPUT"
           echo "stable=true" >>"$GITHUB_OUTPUT"
 
-      - name: Ensure tagged commit is on main
-        if: steps.source_rev.outputs.stable == 'true'
-        run: |
-          set -eu
-          git fetch origin main
-          if git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD; then
-            echo "tagged commit $GITHUB_SHA is contained in origin/main"
-          else
-            echo "error: tagged commit $GITHUB_SHA is not contained in origin/main; refusing to publish the docsite" >&2
-            exit 1
-          fi
-
       - name: Set up Node.js
         if: steps.source_rev.outputs.stable == 'true'
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 24.20.0
           package-manager-cache: false
+
+      - name: Align package version with release tag
+        if: steps.source_rev.outputs.stable == 'true'
+        env:
+          GITHUB_REF_NAME: ${{ github.event.release.tag_name }}
+          GITHUB_REF_TYPE: tag
+        run: npm run release:plan -- --stamp
 
       - name: Build complete docsite
         if: steps.source_rev.outputs.stable == 'true'

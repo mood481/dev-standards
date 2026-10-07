@@ -106,7 +106,7 @@ The updater refuses downgrades, refuses to overwrite any standard whose local co
 ## Version channels
 
 - `devel` — development prereleases.
-- `next` — alpha, beta and release-candidate builds.
+- `next` — alpha, beta and release-candidate builds. It always points at the newest prerelease and is never older than `latest`: publishing a stable release advances `next` to it when it lags behind.
 - `latest` — stable releases.
 
 Use a channel for interactive testing, but prefer an exact version for reproducible installation in a repository.

@@ -177,7 +177,7 @@ This makes updates conservative: local divergence is surfaced as a conflict inst
 ## Version channels
 
 - `devel` — development prereleases.
-- `next` — alpha, beta and release-candidate builds.
+- `next` — alpha, beta and release-candidate builds. Never older than `latest`: a stable release advances it when it lags behind.
 - `latest` — stable releases.
 
 Use a channel for interactive testing, but prefer an exact version for reproducible installation in a repository. The consumer manifest always stores the exact package version actually used.
@@ -205,6 +205,6 @@ npm run docs:verify
 npm run docs:serve
 ```
 
-`docs:serve` rebuilds with the pipeline defaults and serves the same artifact locally at `http://127.0.0.1:8080/dev-standards/`. Stable release tags (`v<major>.<minor>.<patch>`) publish the built output to `mood481/tools-docs` under `site/dev-standards/`; prerelease tags skip publication.
+`docs:serve` rebuilds with the pipeline defaults and serves the same artifact locally at `http://127.0.0.1:8080/dev-standards/`. Prerelease tags (`v0.2.0-beta.2`, …) publish the npm channels on push; stable versions publish (`latest` plus the docsite under `site/dev-standards/`) when their GitHub release is published. The release also advances `next` to the stable version when it lags behind, so `next` is never older than `latest`. package.json holds the release line (e.g. `0.2.0`) and CI stamps it to the tag version before testing and publishing, so prereleases need no package.json bump.
 
 Profiles, agent-specific adapters, OpenSpec guidance and remote synchronization remain outside the current scope.
