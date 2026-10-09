@@ -17,9 +17,10 @@ Keep commit history concise, consistent, machine-readable and useful for review,
 - No numeric length limit is imposed; the constraint is semantic.
 - A commit SHOULD represent one coherent step.
 - Unrelated formatting, cleanup, dependency upgrades or fixes MUST NOT be mixed into a functional commit.
-- Agents that materially create a commit SHOULD add a `Model: <agent> <model> <variant-or-reasoning-effort>` trailer.
+- Agents that materially create a commit SHOULD add a `Model: <agent> - <model> - <variant> - <reasoning-effort>` trailer.
 - Trailer values MUST be real and verifiable.
-- When any of the trailer data is missing, the complete trailer is omitted; invented or `unknown` values MUST NOT be written.
+- `<variant>` and `<reasoning-effort>` are optional and can be omitted; invented or `-` or `unknown` values MUST NOT be written.
+- When `<agent>` or `<model>` of the trailer data is missing or unavailable, the complete trailer is omitted.
 - Trailers are exempt from the restrictions that apply to the explanatory body.
 
 ## Verification
