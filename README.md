@@ -20,7 +20,7 @@ Repository-specific operational documentation stays in the consuming repository.
   "schemaVersion": 1,
   "source": {
     "repository": "mood481/dev-standards",
-    "version": "0.2.0-alpha.0"
+    "version": "0.3.1"
   },
   "context": [
     {
@@ -102,7 +102,7 @@ pnpm dlx @mood481/dev-standards@next list
 Install selected standards into the current repository:
 
 ```bash
-pnpm dlx @mood481/dev-standards@0.2.0-alpha.0 install \
+pnpm dlx @mood481/dev-standards@latest install \
   devel \
   quality \
   commits \
@@ -140,7 +140,7 @@ An existing `AGENTS.md` is always preserved and never overwritten. `install` wit
 For `mplanner-one` in its current backend-only state, the intended initial selection is:
 
 ```bash
-pnpm dlx @mood481/dev-standards@0.2.0-alpha.0 install \
+pnpm dlx @mood481/dev-standards@latest install \
   devel quality commits pull-requests \
   ts-js pocketbase nx-pnpm
 ```
@@ -152,7 +152,7 @@ Add `angular` when the Angular SDK/web libraries are introduced and `triar` only
 Validate the installed manifest, selected files and locally indexed context:
 
 ```bash
-pnpm dlx @mood481/dev-standards@0.2.0-alpha.0 check
+pnpm dlx @mood481/dev-standards@latest check
 ```
 
 `check` fails when a package-managed document is missing or modified, when the manifest context does not match the selection, or when consumer-owned documents in the four indexed directories change without refreshing the manifest. Absence of `AGENTS.md` is normal: `check` reports no warning and fails for no reason solely because the file is missing. `AGENTS.md` stays outside `docs/manifest.json` and integrity tracking, so the manifest remains fully usable in repositories that intentionally have no `AGENTS.md`.
@@ -214,6 +214,6 @@ npm run prerelease:publish -- v0.3.2-beta.0
 
 The command validates the prerelease tag against the package release line, checks the Git worktree and tag, runs tests/catalog/package validation, creates and pushes the tag when necessary, builds a temporary package stamped with the prerelease version, and publishes it to `devel` or `next`.
 
-Stable publication remains workflow-driven. GitHub does not expose a `merged` pull-request activity type, so the workflow listens for `closed` PRs targeting `main` and gates the publish job with `github.event.pull_request.merged == true`. When that merged PR head carries exactly one stable `v<major>.<minor>.<patch>` tag, the package is published as `latest`, `next` is advanced when required, and the docs workflow publishes the same tagged revision. A merged PR without a stable tag is a publication no-op. The docs workflow also keeps manual `workflow_dispatch` for backfilling an already integrated stable tag. package.json holds the release line (e.g. `0.2.0`) and CI stamps it to the tag version before testing and publishing, so prereleases need no package.json bump.
+Stable publication remains workflow-driven. GitHub does not expose a `merged` pull-request activity type, so the workflow listens for `closed` PRs targeting `main` and gates the publish job with `github.event.pull_request.merged == true`. When that merged PR head carries exactly one stable `v<major>.<minor>.<patch>` tag, the package is published as `latest`, `next` is advanced when required, and the docs workflow publishes the same tagged revision. A merged PR without a stable tag is a publication no-op. The docs workflow also keeps manual `workflow_dispatch` for backfilling an already integrated stable tag. `package.json` holds the stable release line (`X.Y.Z`). Stable tags must match it exactly. Prereleases reuse that core version and stamp the suffix only into the temporary package built by `prerelease:publish`.
 
 Profiles, agent-specific adapters, OpenSpec guidance and remote synchronization remain outside the current scope.
