@@ -41,7 +41,7 @@ test('resolvePrereleasePlan accepts supported prerelease channels', () => {
 test('resolvePrereleasePlan rejects stable and mismatched-core tags', () => {
   assert.throws(
     () => resolvePrereleasePlan('0.3.2', 'v0.3.2'),
-    /requires a prerelease tag/,
+    /Expected a prerelease release tag/,
   );
   assert.throws(
     () => resolvePrereleasePlan('0.3.2', 'v0.3.3-beta.0'),
