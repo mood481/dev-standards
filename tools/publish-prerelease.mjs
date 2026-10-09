@@ -5,24 +5,16 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { resolveReleasePlan } from './release-plan.mjs';
+import { resolveRelease } from './release-version.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 export function resolvePrereleasePlan(packageVersion, tag) {
-  const plan = resolveReleasePlan({
-    version: packageVersion,
-    refType: 'tag',
-    refName: tag,
+  return resolveRelease({
+    packageVersion,
+    tag,
+    kind: 'prerelease',
   });
-
-  if (plan.distTag === 'latest') {
-    throw new Error(
-      `prerelease:publish requires a prerelease tag, not stable tag ${tag}.`,
-    );
-  }
-
-  return plan;
 }
 
 function command(program, args, { cwd = root, inherit = false, allowFailure = false } = {}) {
@@ -122,6 +114,7 @@ async function runPublish() {
     ['rev-parse', '-q', '--verify', `refs/tags/${tag}`],
     { allowFailure: true },
   );
+
   if (localTag.status === 0 && (localTag.stdout || '').trim() !== head) {
     throw new Error(`Local tag ${tag} already points to another commit.`);
   }
@@ -130,6 +123,7 @@ async function runPublish() {
     'git',
     ['ls-remote', '--tags', 'origin', `refs/tags/${tag}`],
   );
+
   if (remoteOutput) {
     const remoteSha = remoteOutput.split(/\s+/)[0];
     if (remoteSha !== head) {
@@ -153,17 +147,14 @@ async function runPublish() {
   command('npm', ['run', 'catalog:check'], { inherit: true });
   command('npm', ['pack', '--dry-run'], { inherit: true });
 
-  if (localTag.status !== 0) {
+  const createdLocalTag = localTag.status !== 0;
+  if (createdLocalTag) {
     command('git', ['tag', tag]);
     console.log(`Created local tag ${tag}.`);
   }
 
-  if (!remoteOutput) {
-    command('git', ['push', 'origin', `refs/tags/${tag}`], { inherit: true });
-    console.log(`Pushed tag ${tag}.`);
-  }
-
   const artifact = await createTarball(plan.version);
+
   try {
     command(
       'npm',
@@ -177,8 +168,18 @@ async function runPublish() {
       ],
       { inherit: true },
     );
+  } catch (error) {
+    if (createdLocalTag) {
+      command('git', ['tag', '-d', tag], { allowFailure: true });
+    }
+    throw error;
   } finally {
     await rm(artifact.tempRoot, { recursive: true, force: true });
+  }
+
+  if (!remoteOutput) {
+    command('git', ['push', 'origin', `refs/tags/${tag}`], { inherit: true });
+    console.log(`Pushed tag ${tag}.`);
   }
 
   console.log(

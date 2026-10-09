@@ -58,13 +58,6 @@ jobs:
           scope: '@mood481'
           package-manager-cache: false
 
-      - name: Stamp stable version
-        if: steps.release_ref.outputs.publish == 'true'
-        env:
-          GITHUB_REF_NAME: ${{ steps.release_ref.outputs.tag }}
-          GITHUB_REF_TYPE: tag
-        run: npm run release:plan -- --stamp
-
       - name: Validate package
         if: steps.release_ref.outputs.publish == 'true'
         run: npm test
