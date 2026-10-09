@@ -206,13 +206,13 @@ npm run docs:verify
 npm run docs:serve
 ```
 
-`docs:serve` rebuilds with the pipeline defaults and serves the same artifact locally at `http://127.0.0.1:8080/dev-standards/`. Prereleases are explicit local publications rather than GitHub Actions runs. From a clean checkout with the Gitea registry and `GITEA_TOKEN` configured, run:
+`docs:serve` rebuilds with the pipeline defaults and serves the same artifact locally at `http://127.0.0.1:8080/dev-standards/`. Prereleases are explicit local publications rather than GitHub Actions runs. First set `package.json` to the intended stable release line `X.Y.Z`; then, from a clean checkout with the Gitea registry and `GITEA_TOKEN` configured, run a prerelease tag on that same core, for example:
 
 ```bash
-npm run prerelease:publish -- v0.3.2-beta.0
+npm run prerelease:publish -- v0.3.1-beta.0
 ```
 
-The command validates the prerelease tag against the package release line, checks the Git worktree and tag, runs tests/catalog/package validation, creates and pushes the tag when necessary, builds a temporary package stamped with the prerelease version, and publishes it to `devel` or `next`.
+The command validates the prerelease tag against the package release line, checks the Git worktree and tag, runs tests/catalog/package validation, creates the tag locally when necessary, builds and publishes a temporary package stamped with the prerelease version, and only then pushes the tag to origin. If package publication fails, a newly created local tag is removed and no remote tag is left behind.
 
 Stable publication remains workflow-driven. GitHub does not expose a `merged` pull-request activity type, so the workflow listens for `closed` PRs targeting `main` and gates the publish job with `github.event.pull_request.merged == true`. When that merged PR head carries exactly one stable `v<major>.<minor>.<patch>` tag, the package is published as `latest`, `next` is advanced when required, and the docs workflow publishes the same tagged revision. A merged PR without a stable tag is a publication no-op. The docs workflow also keeps manual `workflow_dispatch` for backfilling an already integrated stable tag. `package.json` holds the stable release line (`X.Y.Z`). Stable tags must match it exactly. Prereleases reuse that core version and stamp the suffix only into the temporary package built by `prerelease:publish`.
 
