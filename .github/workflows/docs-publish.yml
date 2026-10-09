@@ -1,13 +1,8 @@
-# dev-standards docsite publication to the tools-docs aggregator.
+# Stable docsite publication to the tools-docs aggregator.
 #
-# Stable documentation is published when a PR with an exact v<major>.<minor>.<patch>
-# tag on its head commit is merged into main. Prerelease tag pushes never invoke
-# this workflow.
-#
-# workflow_dispatch exists for recovery/backfill of an already merged stable tag.
-#
-# dev-standards owns only its documentation subtree site/dev-standards/. The
-# site-wide deployment belongs to mood481/tools-docs.
+# Automatic publication follows the stable release convention: a merged PR
+# into main whose head commit carries exactly one stable v<major>.<minor>.<patch>
+# tag. workflow_dispatch is retained only for recovery/backfill.
 name: docs-publish
 
 on:
@@ -39,68 +34,14 @@ jobs:
 
       - name: Resolve stable release tag
         id: release_ref
-        shell: bash
         env:
-          MANUAL_TAG: ${{ inputs.tag }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          set -eu
-
-          stable='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
-          git fetch --tags --force origin
-          git fetch --no-tags origin main:refs/remotes/origin/main
-
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
-            tag="$MANUAL_TAG"
-
-            if ! printf '%s' "$tag" | grep -Eq "$stable"; then
-              echo "::error::Manual doc publication requires a stable tag v<major>.<minor>.<patch>."
-              exit 1
-            fi
-
-            tagged_rev="$(git rev-list -n 1 "$tag")"
-            if ! git merge-base --is-ancestor "$tagged_rev" refs/remotes/origin/main; then
-              echo "::error::Stable tag $tag is not contained in main."
-              exit 1
-            fi
-
-            echo "publish=true" >>"$GITHUB_OUTPUT"
-            echo "tag=$tag" >>"$GITHUB_OUTPUT"
-            echo "rev=$tagged_rev" >>"$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          matches="$(
-            git tag --points-at "$PR_HEAD_SHA" |
-              while IFS= read -r tag; do
-                if printf '%s' "$tag" | grep -Eq "$stable"; then
-                  printf '%s\n' "$tag"
-                fi
-              done
-          )"
-
-          count="$(printf '%s\n' "$matches" | sed '/^$/d' | wc -l | tr -d ' ')"
-
-          if [ "$count" = "0" ]; then
-            echo "Merged PR head has no stable release tag; docs publication is not required."
-            echo "publish=false" >>"$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [ "$count" != "1" ]; then
-            echo "::error::Expected one stable release tag on merged PR head $PR_HEAD_SHA, found $count."
-            printf '%s\n' "$matches"
-            exit 1
-          fi
-
-          tag="$(printf '%s\n' "$matches" | sed '/^$/d')"
-          echo "publish=true" >>"$GITHUB_OUTPUT"
-          echo "tag=$tag" >>"$GITHUB_OUTPUT"
-          echo "rev=$PR_HEAD_SHA" >>"$GITHUB_OUTPUT"
+          RELEASE_SHA: ${{ github.event.pull_request.head.sha }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          REQUIRE_MAIN: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
+        run: npm run release:stable-ref
 
       - name: Check out release revision
         if: steps.release_ref.outputs.publish == 'true'
-        shell: bash
         run: git checkout --detach "refs/tags/${{ steps.release_ref.outputs.tag }}"
 
       - name: Set up Node.js
@@ -145,4 +86,4 @@ jobs:
         run: |
           set -eu
           : "${TOOLS_DOCS_TOKEN:?TOOLS_DOCS_TOKEN secret is not configured}"
-          sh scripts/docs/publish-to-tools-docs.sh dist/docs-site tools-docs "${{ steps.release_ref.outputs.rev }}" --push
+          sh scripts/docs/publish-to-tools-docs.sh dist/docs-site tools-docs "${{ steps.release_ref.outputs.revision }}" --push

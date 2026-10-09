@@ -25,7 +25,9 @@
     "dist:next": "node tools/advance-next.mjs",
     "docs:build": "node scripts/docs/build-docsite.mjs",
     "docs:verify": "node scripts/docs/verify-site-paths.mjs",
-    "docs:serve": "node scripts/docs/serve-local.mjs"
+    "docs:serve": "node scripts/docs/serve-local.mjs",
+    "release:stable-ref": "node tools/stable-release-ref.mjs",
+    "prerelease:publish": "node tools/publish-prerelease.mjs"
   },
   "engines": {
     "node": ">=22"

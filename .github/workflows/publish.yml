@@ -1,21 +1,6 @@
-name: Publish package
-
-# Release channels:
-# - prereleases are published immediately from prerelease tag pushes;
-# - stable releases are published only when a PR carrying an exact stable tag
-#   on its head commit is merged into main.
-#
-# A stable tag may therefore be created and pushed before the PR without
-# publishing or failing. package.json holds the release line and CI stamps the
-# exact tag version before validation and publication.
+name: Publish stable package
 
 on:
-  push:
-    tags:
-      - 'v*-devel.*'
-      - 'v*-alpha.*'
-      - 'v*-beta.*'
-      - 'v*-rc.*'
   pull_request:
     branches:
       - main
@@ -27,8 +12,8 @@ permissions:
 
 jobs:
   publish:
-    name: Publish to Gitea
-    if: github.event_name == 'push' || github.event.pull_request.merged == true
+    name: Publish stable package to Gitea
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-24.04
     steps:
       - name: Check out repository
@@ -36,57 +21,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Resolve release tag
+      - name: Resolve stable release tag
         id: release_ref
-        shell: bash
         env:
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          set -eu
-
-          stable='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
-
-          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
-            echo "publish=true" >>"$GITHUB_OUTPUT"
-            echo "stable=false" >>"$GITHUB_OUTPUT"
-            echo "tag=$GITHUB_REF_NAME" >>"$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          git fetch --tags --force origin
-
-          matches="$(
-            git tag --points-at "$PR_HEAD_SHA" |
-              while IFS= read -r tag; do
-                if printf '%s' "$tag" | grep -Eq "$stable"; then
-                  printf '%s\n' "$tag"
-                fi
-              done
-          )"
-
-          count="$(printf '%s\n' "$matches" | sed '/^$/d' | wc -l | tr -d ' ')"
-
-          if [ "$count" = "0" ]; then
-            echo "No stable release tag points at merged PR head $PR_HEAD_SHA; nothing to publish."
-            echo "publish=false" >>"$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [ "$count" != "1" ]; then
-            echo "::error::Expected one stable release tag on merged PR head $PR_HEAD_SHA, found $count."
-            printf '%s\n' "$matches"
-            exit 1
-          fi
-
-          tag="$(printf '%s\n' "$matches" | sed '/^$/d')"
-          echo "publish=true" >>"$GITHUB_OUTPUT"
-          echo "stable=true" >>"$GITHUB_OUTPUT"
-          echo "tag=$tag" >>"$GITHUB_OUTPUT"
-          echo "Publishing stable tag $tag after merge into main."
+          RELEASE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: npm run release:stable-ref
 
       - name: Check out release revision
         if: steps.release_ref.outputs.publish == 'true'
-        shell: bash
         run: git checkout --detach "refs/tags/${{ steps.release_ref.outputs.tag }}"
 
       - name: Validate registry configuration
@@ -99,7 +41,6 @@ jobs:
             echo "::error::GITEA_NPM_REGISTRY is not configured as an Actions variable or secret."
             exit 1
           fi
-
           case "$GITEA_NPM_REGISTRY" in
             http://*|https://*) ;;
             *)
@@ -117,8 +58,7 @@ jobs:
           scope: '@mood481'
           package-manager-cache: false
 
-      - name: Resolve release plan
-        id: release
+      - name: Stamp stable version
         if: steps.release_ref.outputs.publish == 'true'
         env:
           GITHUB_REF_NAME: ${{ steps.release_ref.outputs.tag }}
@@ -138,11 +78,10 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITEA_TOKEN }}
           GITEA_NPM_REGISTRY: ${{ vars.GITEA_NPM_REGISTRY || secrets.GITEA_NPM_REGISTRY }}
-          DIST_TAG: ${{ steps.release.outputs.dist_tag }}
-        run: npm publish --registry "$GITEA_NPM_REGISTRY" --tag "$DIST_TAG"
+        run: npm publish --registry "$GITEA_NPM_REGISTRY" --tag latest
 
       - name: Advance next channel when behind stable
-        if: steps.release_ref.outputs.publish == 'true' && steps.release_ref.outputs.stable == 'true'
+        if: steps.release_ref.outputs.publish == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITEA_TOKEN }}
         run: node tools/advance-next.mjs --apply
