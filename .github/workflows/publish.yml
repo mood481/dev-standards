@@ -1,17 +1,26 @@
 name: Publish package
 
-# All package publication is tag-driven:
-# - prerelease tags (v<core>-{devel|alpha|beta|rc}.N) publish on tag push;
-# - stable tags (v<core>) publish on tag push only when the tagged commit is
-#   contained in main.
-# Prereleases never publish the docsite. Stable tags publish npm latest and
-# advance next when needed. package.json holds the release line and CI stamps
-# the exact tag version before validation and publication.
+# Release channels:
+# - prereleases are published immediately from prerelease tag pushes;
+# - stable releases are published only when a PR carrying an exact stable tag
+#   on its head commit is merged into main.
+#
+# A stable tag may therefore be created and pushed before the PR without
+# publishing or failing. package.json holds the release line and CI stamps the
+# exact tag version before validation and publication.
 
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*-devel.*'
+      - 'v*-alpha.*'
+      - 'v*-beta.*'
+      - 'v*-rc.*'
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
 
 permissions:
   contents: read
@@ -19,45 +28,69 @@ permissions:
 jobs:
   publish:
     name: Publish to Gitea
+    if: github.event_name == 'push' || github.event.pull_request.merged == true
     runs-on: ubuntu-24.04
     steps:
-      - name: Check out tagged revision
+      - name: Check out repository
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           fetch-depth: 0
 
-      - name: Gate release channel
-        id: gate
+      - name: Resolve release tag
+        id: release_ref
         shell: bash
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -eu
 
-          tag="$GITHUB_REF_NAME"
           stable='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
-          prerelease='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-(devel|alpha|beta|rc)\.(0|[1-9][0-9]*)$'
 
-          if printf '%s' "$tag" | grep -Eq "$prerelease"; then
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            echo "publish=true" >>"$GITHUB_OUTPUT"
             echo "stable=false" >>"$GITHUB_OUTPUT"
-            echo "Publishing prerelease tag $tag."
+            echo "tag=$GITHUB_REF_NAME" >>"$GITHUB_OUTPUT"
             exit 0
           fi
 
-          if ! printf '%s' "$tag" | grep -Eq "$stable"; then
-            echo "::error::Unsupported release tag $tag."
+          git fetch --tags --force origin
+
+          matches="$(
+            git tag --points-at "$PR_HEAD_SHA" |
+              while IFS= read -r tag; do
+                if printf '%s' "$tag" | grep -Eq "$stable"; then
+                  printf '%s\n' "$tag"
+                fi
+              done
+          )"
+
+          count="$(printf '%s\n' "$matches" | sed '/^$/d' | wc -l | tr -d ' ')"
+
+          if [ "$count" = "0" ]; then
+            echo "No stable release tag points at merged PR head $PR_HEAD_SHA; nothing to publish."
+            echo "publish=false" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$count" != "1" ]; then
+            echo "::error::Expected one stable release tag on merged PR head $PR_HEAD_SHA, found $count."
+            printf '%s\n' "$matches"
             exit 1
           fi
 
-          git fetch --no-tags origin main:refs/remotes/origin/main
-          tagged_rev="$(git rev-parse HEAD)"
-          if ! git merge-base --is-ancestor "$tagged_rev" refs/remotes/origin/main; then
-            echo "::error::Stable tag $tag must point to a commit contained in main."
-            exit 1
-          fi
-
+          tag="$(printf '%s\n' "$matches" | sed '/^$/d')"
+          echo "publish=true" >>"$GITHUB_OUTPUT"
           echo "stable=true" >>"$GITHUB_OUTPUT"
-          echo "Publishing stable tag $tag from main."
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+          echo "Publishing stable tag $tag after merge into main."
+
+      - name: Check out release revision
+        if: steps.release_ref.outputs.publish == 'true'
+        shell: bash
+        run: git checkout --detach "refs/tags/${{ steps.release_ref.outputs.tag }}"
 
       - name: Validate registry configuration
+        if: steps.release_ref.outputs.publish == 'true'
         env:
           GITEA_NPM_REGISTRY: ${{ vars.GITEA_NPM_REGISTRY || secrets.GITEA_NPM_REGISTRY }}
         shell: bash
@@ -76,6 +109,7 @@ jobs:
           esac
 
       - name: Set up Node.js
+        if: steps.release_ref.outputs.publish == 'true'
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 24.20.0
@@ -85,18 +119,22 @@ jobs:
 
       - name: Resolve release plan
         id: release
+        if: steps.release_ref.outputs.publish == 'true'
         env:
-          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_REF_NAME: ${{ steps.release_ref.outputs.tag }}
           GITHUB_REF_TYPE: tag
         run: npm run release:plan -- --stamp
 
       - name: Validate package
+        if: steps.release_ref.outputs.publish == 'true'
         run: npm test
 
       - name: Inspect package contents
+        if: steps.release_ref.outputs.publish == 'true'
         run: npm pack --dry-run
 
       - name: Publish package
+        if: steps.release_ref.outputs.publish == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITEA_TOKEN }}
           GITEA_NPM_REGISTRY: ${{ vars.GITEA_NPM_REGISTRY || secrets.GITEA_NPM_REGISTRY }}
@@ -104,7 +142,7 @@ jobs:
         run: npm publish --registry "$GITEA_NPM_REGISTRY" --tag "$DIST_TAG"
 
       - name: Advance next channel when behind stable
-        if: steps.gate.outputs.stable == 'true'
+        if: steps.release_ref.outputs.publish == 'true' && steps.release_ref.outputs.stable == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITEA_TOKEN }}
         run: node tools/advance-next.mjs --apply
