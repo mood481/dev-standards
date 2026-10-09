@@ -206,6 +206,14 @@ npm run docs:verify
 npm run docs:serve
 ```
 
-`docs:serve` rebuilds with the pipeline defaults and serves the same artifact locally at `http://127.0.0.1:8080/dev-standards/`. Prerelease tags (`v0.2.0-beta.2`, …) publish the npm channels on push; stable versions publish (`latest` plus the docsite under `site/dev-standards/`) when their GitHub release is published. The release also advances `next` to the stable version when it lags behind, so `next` is never older than `latest`. package.json holds the release line (e.g. `0.2.0`) and CI stamps it to the tag version before testing and publishing, so prereleases need no package.json bump.
+`docs:serve` rebuilds with the pipeline defaults and serves the same artifact locally at `http://127.0.0.1:8080/dev-standards/`. Prereleases are explicit local publications rather than GitHub Actions runs. From a clean checkout with the Gitea registry and `GITEA_TOKEN` configured, run:
+
+```bash
+npm run prerelease:publish -- v0.3.2-beta.0
+```
+
+The command validates the prerelease tag against the package release line, checks the Git worktree and tag, runs tests/catalog/package validation, creates and pushes the tag when necessary, builds a temporary package stamped with the prerelease version, and publishes it to `devel` or `next`.
+
+Stable publication remains workflow-driven. GitHub does not expose a `merged` pull-request activity type, so the workflow listens for `closed` PRs targeting `main` and gates the publish job with `github.event.pull_request.merged == true`. When that merged PR head carries exactly one stable `v<major>.<minor>.<patch>` tag, the package is published as `latest`, `next` is advanced when required, and the docs workflow publishes the same tagged revision. A merged PR without a stable tag is a publication no-op. The docs workflow also keeps manual `workflow_dispatch` for backfilling an already integrated stable tag. package.json holds the release line (e.g. `0.2.0`) and CI stamps it to the tag version before testing and publishing, so prereleases need no package.json bump.
 
 Profiles, agent-specific adapters, OpenSpec guidance and remote synchronization remain outside the current scope.
