@@ -44,7 +44,7 @@ npx -p @mood481/dev-standards@next dev-standards list
 ## Install selected standards
 
 ```bash
-pnpm dlx @mood481/dev-standards@0.2.0 install \
+pnpm dlx @mood481/dev-standards@latest install \
   devel \
   quality \
   commits \
@@ -57,7 +57,7 @@ pnpm dlx @mood481/dev-standards@0.2.0 install \
 Equivalent with `npx`:
 
 ```bash
-npx -p @mood481/dev-standards@0.2.0 dev-standards install \
+npx -p @mood481/dev-standards@latest dev-standards install \
   devel quality commits pull-requests ts-js pocketbase nx-pnpm
 ```
 
@@ -89,7 +89,7 @@ An existing `AGENTS.md` is always preserved and never overwritten. `install` wit
 ## Check
 
 ```bash
-pnpm dlx @mood481/dev-standards@0.2.0 check
+pnpm dlx @mood481/dev-standards@latest check
 ```
 
 `check` fails when a package-managed document is missing or modified, when the manifest context does not match the selection, or when consumer-owned documents change without refreshing the manifest. Absence of `AGENTS.md` is normal: `check` reports no warning and fails for no reason solely because the file is missing.
