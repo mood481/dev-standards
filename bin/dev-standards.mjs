@@ -51,7 +51,7 @@ async function main(args) {
     }
 
     if (command === 'install') {
-      await install(parseSelectionCommand(args.slice(1), 'install'));
+      await install(parseInstallCommand(args.slice(1)));
       return 0;
     }
 
@@ -77,12 +77,14 @@ async function main(args) {
 function printHelp() {
   console.log(`Usage:
   dev-standards list
-  dev-standards install <id> [<id> ...] [--path <repository>]
+  dev-standards install <id> [<id> ...] [--path <repository>] [--agents]
   dev-standards check [--path <repository>]
   dev-standards update [--path <repository>]
   dev-standards --version
 
 install adds selected standards for the current package version.
+install writes AGENTS.md from the packaged template only with --agents
+and only when it does not exist; an existing AGENTS.md is never overwritten.
 check validates the installed manifest and detects local drift.
 update upgrades every installed standard to the running package version
 when the installed files still match their recorded hashes.`);
@@ -94,10 +96,10 @@ function printCatalog() {
   }
 }
 
-function parseSelectionCommand(args, command) {
-  const parsed = parsePath(args);
+function parseInstallCommand(args) {
+  const parsed = parsePath(args, { booleanFlags: ['--agents'] });
   if (parsed.positionals.length === 0) {
-    throw new Error(`${command} requires at least one standard id`);
+    throw new Error('install requires at least one standard id');
   }
 
   const unknown = parsed.positionals.filter((id) => !catalog.has(id));
@@ -108,6 +110,7 @@ function parseSelectionCommand(args, command) {
   return {
     repository: parsed.repository,
     ids: [...new Set(parsed.positionals)],
+    agents: parsed.flags.has('--agents'),
   };
 }
 
@@ -121,9 +124,11 @@ function parseRepositoryCommand(args, command) {
   return { repository: parsed.repository };
 }
 
-function parsePath(args) {
+function parsePath(args, options = {}) {
+  const booleanFlags = new Set(options.booleanFlags ?? []);
   let path = '.';
   const positionals = [];
+  const flags = new Set();
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -138,6 +143,11 @@ function parsePath(args) {
       continue;
     }
 
+    if (booleanFlags.has(arg)) {
+      flags.add(arg);
+      continue;
+    }
+
     if (arg.startsWith('--')) {
       throw new Error(`Unknown option: ${arg}`);
     }
@@ -148,10 +158,11 @@ function parsePath(args) {
   return {
     repository: resolve(path),
     positionals,
+    flags,
   };
 }
 
-async function install({ repository, ids }) {
+async function install({ repository, ids, agents }) {
   await mkdir(repository, { recursive: true });
 
   const existingManifest = await readManifest(repository, { required: false });
@@ -180,7 +191,9 @@ async function install({ repository, ids }) {
   }
 
   await writeConsumerManifest(repository, plan);
-  await ensureAgents(repository);
+  if (agents) {
+    await ensureAgents(repository);
+  }
   console.log(`installed\t${repository}`);
 }
 
@@ -233,10 +246,6 @@ async function check({ repository }) {
     );
   }
 
-  if (!(await exists(join(repository, 'AGENTS.md')))) {
-    console.log('warning\tAGENTS.md is missing');
-  }
-
   if (issues.length > 0) {
     throw new Error(issues.join('\n'));
   }
@@ -284,7 +293,6 @@ async function update({ repository }) {
   }
 
   await writeConsumerManifest(repository, plan);
-  await ensureAgents(repository);
 
   if (comparison === 0) {
     console.log(`current\t${packageJson.version}`);

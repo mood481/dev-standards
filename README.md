@@ -112,12 +112,11 @@ pnpm dlx @mood481/dev-standards@0.2.0-alpha.0 install \
   nx-pnpm
 ```
 
-Use `--path <repository>` to target another checkout.
+Use `--path <repository>` to target another checkout. Use `--agents` to also create `AGENTS.md` from the packaged template when it does not exist.
 
 The installer creates or updates:
 
 ```text
-AGENTS.md
 docs/
 ├── manifest.json
 ├── rules/
@@ -134,7 +133,9 @@ docs/
     └── ...             # package-managed or consumer-owned
 ```
 
-An existing `AGENTS.md` is preserved. Standards-owned files are never overwritten by `install` when they differ locally. Adding standards from a newer package version requires `update` first so the manifest always describes one coherent source version.
+With `--agents`, the installer also creates `AGENTS.md` from the packaged template only when it does not already exist.
+
+An existing `AGENTS.md` is always preserved and never overwritten. `install` without `--agents` never creates it. Standards-owned files are never overwritten by `install` when they differ locally. Adding standards from a newer package version requires `update` first so the manifest always describes one coherent source version.
 
 For `mplanner-one` in its current backend-only state, the intended initial selection is:
 
@@ -154,7 +155,7 @@ Validate the installed manifest, selected files and locally indexed context:
 pnpm dlx @mood481/dev-standards@0.2.0-alpha.0 check
 ```
 
-`check` fails when a package-managed document is missing or modified, when the manifest context does not match the selection, or when consumer-owned documents in the four indexed directories change without refreshing the manifest. A missing `AGENTS.md` is reported as a warning.
+`check` fails when a package-managed document is missing or modified, when the manifest context does not match the selection, or when consumer-owned documents in the four indexed directories change without refreshing the manifest. Absence of `AGENTS.md` is normal: `check` reports no warning and fails for no reason solely because the file is missing. `AGENTS.md` stays outside `docs/manifest.json` and integrity tracking, so the manifest remains fully usable in repositories that intentionally have no `AGENTS.md`.
 
 ## Update
 
@@ -172,7 +173,7 @@ The updater:
 4. replaces unchanged installed standards with the target package contents;
 5. refreshes managed and consumer-owned context entries together with the exact source version.
 
-This makes updates conservative: local divergence is surfaced as a conflict instead of being discarded.
+This makes updates conservative: local divergence is surfaced as a conflict instead of being discarded. `update` never creates `AGENTS.md` implicitly and preserves any existing `AGENTS.md`.
 
 ## Version channels
 
