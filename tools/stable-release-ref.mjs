@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { resolveReleasePlan } from './release-plan.mjs';
+import { resolveRelease } from './release-version.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const stablePattern = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
@@ -91,15 +91,12 @@ async function run() {
   const packageJson = JSON.parse(
     await readFile(resolve(root, 'package.json'), 'utf8'),
   );
-  const plan = resolveReleasePlan({
-    version: packageJson.version,
-    refType: 'tag',
-    refName: tag,
-  });
 
-  if (plan.distTag !== 'latest') {
-    throw new Error(`Expected a stable release tag, got ${tag}.`);
-  }
+  resolveRelease({
+    packageVersion: packageJson.version,
+    tag,
+    kind: 'stable',
+  });
 
   console.log(`Stable release ${tag} at ${revision}.`);
   await writeOutput({
