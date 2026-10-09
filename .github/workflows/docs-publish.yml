@@ -51,13 +51,6 @@ jobs:
           node-version: 24.20.0
           package-manager-cache: false
 
-      - name: Align package version with release tag
-        if: steps.release_ref.outputs.publish == 'true'
-        env:
-          GITHUB_REF_NAME: ${{ steps.release_ref.outputs.tag }}
-          GITHUB_REF_TYPE: tag
-        run: npm run release:plan -- --stamp
-
       - name: Build complete docsite
         if: steps.release_ref.outputs.publish == 'true'
         run: |
