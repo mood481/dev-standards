@@ -1,26 +1,20 @@
 # dev-standards docsite publication to the tools-docs aggregator.
 #
-# dev-standards owns only its documentation subtree site/dev-standards/. The
-# site-wide deployment belongs to mood481/tools-docs: its own workflow
-# deploys the complete site/ tree when site/** changes on main. This workflow
-# never configures the domain or site-wide deployment.
+# Publication is tag-driven. Only a stable tag v<major>.<minor>.<patch> whose
+# tagged commit is contained in main publishes documentation. Prerelease tags
+# publish package channels only and never update tools-docs.
 #
-# Publication happens when the stable GitHub release is published
-# (v<major>.<minor>.<patch> with no prerelease suffix). Releases are cut from
-# main (default branch), so the release event itself is the main-line signal
-# and no extra containment check is needed. Prerelease tags publish the npm
-# channels on push but never the docsite. There is no manual dispatch.
+# dev-standards owns only its documentation subtree site/dev-standards/. The
+# site-wide deployment belongs to mood481/tools-docs.
 #
 # Cross-repository write uses the fine-grained PAT secret TOOLS_DOCS_TOKEN
-# with only Contents: read/write on mood481/tools-docs. It never uses
-# GITHUB_TOKEN as a cross-repository write substitute. Credentials never enter
-# repository content or logs: the token appears only as the checkout token for
-# the tools-docs repository.
+# with Contents: read/write on mood481/tools-docs.
 name: docs-publish
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: read
@@ -30,54 +24,70 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - name: Check out released revision
+      - name: Check out tagged revision
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
-          ref: ${{ github.event.release.tag_name }}
           fetch-depth: 0
 
-      - name: Resolve source revision and stable release gate
-        id: source_rev
+      - name: Gate stable main release
+        id: gate
+        shell: bash
         run: |
           set -eu
-          tag="${{ github.event.release.tag_name }}"
-          if ! printf '%s' "$tag" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
-            echo "Skipping docsite publication: release $tag is not a stable release (want v<major>.<minor>.<patch> with no suffix)."
-            echo "stable=false" >>"$GITHUB_OUTPUT"
+
+          tag="$GITHUB_REF_NAME"
+          stable='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+          prerelease='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-(devel|alpha|beta|rc)\.(0|[1-9][0-9]*)$'
+
+          if printf '%s' "$tag" | grep -Eq "$prerelease"; then
+            echo "publish=false" >>"$GITHUB_OUTPUT"
+            echo "Skipping docsite publication for prerelease tag $tag."
             exit 0
           fi
-          rev="$(git rev-parse HEAD)"
-          echo "dev-standards source revision: $rev ($tag)"
-          echo "rev=$rev" >>"$GITHUB_OUTPUT"
-          echo "stable=true" >>"$GITHUB_OUTPUT"
+
+          if ! printf '%s' "$tag" | grep -Eq "$stable"; then
+            echo "::error::Unsupported release tag $tag."
+            exit 1
+          fi
+
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          tagged_rev="$(git rev-parse HEAD)"
+          if ! git merge-base --is-ancestor "$tagged_rev" refs/remotes/origin/main; then
+            echo "::error::Stable tag $tag must point to a commit contained in main."
+            exit 1
+          fi
+
+          echo "publish=true" >>"$GITHUB_OUTPUT"
+          echo "rev=$tagged_rev" >>"$GITHUB_OUTPUT"
+          echo "Publishing docsite for stable tag $tag from main."
 
       - name: Set up Node.js
-        if: steps.source_rev.outputs.stable == 'true'
+        if: steps.gate.outputs.publish == 'true'
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 24.20.0
           package-manager-cache: false
 
       - name: Align package version with release tag
-        if: steps.source_rev.outputs.stable == 'true'
+        if: steps.gate.outputs.publish == 'true'
         env:
-          GITHUB_REF_NAME: ${{ github.event.release.tag_name }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
           GITHUB_REF_TYPE: tag
         run: npm run release:plan -- --stamp
 
       - name: Build complete docsite
-        if: steps.source_rev.outputs.stable == 'true'
+        if: steps.gate.outputs.publish == 'true'
         run: |
           set -eu
           node scripts/docs/build-docsite.mjs
           test -f dist/docs-site/index.html
 
-      - name: Verify site path contract (no live DNS)
-        if: steps.source_rev.outputs.stable == 'true'
+      - name: Verify site path contract
+        if: steps.gate.outputs.publish == 'true'
         run: node scripts/docs/verify-site-paths.mjs
 
       - name: Check out current tools-docs main
-        if: steps.source_rev.outputs.stable == 'true'
+        if: steps.gate.outputs.publish == 'true'
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           repository: mood481/tools-docs
@@ -87,10 +97,10 @@ jobs:
           fetch-depth: 0
 
       - name: Publish subtree to tools-docs
-        if: steps.source_rev.outputs.stable == 'true'
+        if: steps.gate.outputs.publish == 'true'
         env:
           TOOLS_DOCS_TOKEN: ${{ secrets.TOOLS_DOCS_TOKEN }}
         run: |
           set -eu
           : "${TOOLS_DOCS_TOKEN:?TOOLS_DOCS_TOKEN secret is not configured}"
-          sh scripts/docs/publish-to-tools-docs.sh dist/docs-site tools-docs "${{ steps.source_rev.outputs.rev }}" --push
+          sh scripts/docs/publish-to-tools-docs.sh dist/docs-site tools-docs "${{ steps.gate.outputs.rev }}" --push
