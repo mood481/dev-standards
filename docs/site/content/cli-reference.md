@@ -19,7 +19,7 @@ dev-standards --version
 Print the installable catalog as `<type>\t<id>` rows:
 
 ```bash
-pnpm dlx @mood481/dev-standards@0.2.0 list
+pnpm dlx @mood481/dev-standards@latest list
 ```
 
 ## `install`
@@ -27,7 +27,7 @@ pnpm dlx @mood481/dev-standards@0.2.0 list
 Install selected standards for the current package version:
 
 ```bash
-pnpm dlx @mood481/dev-standards@0.2.0 install devel quality --path /tmp/example
+pnpm dlx @mood481/dev-standards@latest install devel quality --path /tmp/example
 ```
 
 - Requires at least one standard id; unknown ids fail.
@@ -43,7 +43,7 @@ pnpm dlx @mood481/dev-standards@0.2.0 install devel quality --path /tmp/example
 Validate the installed manifest, selected files and locally indexed context:
 
 ```bash
-pnpm dlx @mood481/dev-standards@0.2.0 check --path /tmp/example
+pnpm dlx @mood481/dev-standards@latest check --path /tmp/example
 ```
 
 - Accepts no standard ids; it operates on `docs/manifest.json`.
