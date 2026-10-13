@@ -6,6 +6,12 @@ on:
       - main
     types:
       - closed
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Stable release tag to publish, for example v0.3.1
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -13,18 +19,21 @@ permissions:
 jobs:
   publish:
     name: Publish stable package to Gitea
-    if: github.event.pull_request.merged == true
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     runs-on: ubuntu-24.04
     steps:
       - name: Check out repository
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.sha }}
           fetch-depth: 0
 
       - name: Resolve stable release tag
         id: release_ref
         env:
           RELEASE_SHA: ${{ github.event.pull_request.head.sha }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          REQUIRE_MAIN: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
         run: npm run release:stable-ref
 
       - name: Check out release revision
