@@ -1,16 +1,15 @@
 # Stable docsite publication to the tools-docs aggregator.
 #
-# Automatic publication follows the stable release convention: a merged PR
-# into main whose head commit carries exactly one stable v<major>.<minor>.<patch>
-# tag. workflow_dispatch is retained only for recovery/backfill.
+# Stable releases are tag-driven. A pushed v<major>.<minor>.<patch> tag
+# publishes documentation only when the tagged commit is contained in main.
+# workflow_dispatch is retained for recovery/backfill.
 name: docs-publish
 
 on:
-  pull_request:
-    branches:
-      - main
-    types:
-      - closed
+  push:
+    tags:
+      - 'v*.*.*'
+      - '!v*-*'
   workflow_dispatch:
     inputs:
       tag:
@@ -23,7 +22,6 @@ permissions:
 
 jobs:
   publish:
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -35,9 +33,9 @@ jobs:
       - name: Resolve stable release tag
         id: release_ref
         env:
-          RELEASE_SHA: ${{ github.event.pull_request.head.sha }}
-          RELEASE_TAG: ${{ inputs.tag }}
-          REQUIRE_MAIN: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
+          RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+          REQUIRE_MAIN: 'true'
+          MAIN_POLICY: ${{ github.event_name == 'push' && 'skip' || 'error' }}
         run: npm run release:stable-ref
 
       - name: Check out release revision

@@ -1,11 +1,10 @@
 name: Publish stable package
 
 on:
-  pull_request:
-    branches:
-      - main
-    types:
-      - closed
+  push:
+    tags:
+      - 'v*.*.*'
+      - '!v*-*'
   workflow_dispatch:
     inputs:
       tag:
@@ -19,7 +18,6 @@ permissions:
 jobs:
   publish:
     name: Publish stable package to Gitea
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     runs-on: ubuntu-24.04
     steps:
       - name: Check out repository
@@ -30,9 +28,9 @@ jobs:
       - name: Resolve stable release tag
         id: release_ref
         env:
-          RELEASE_SHA: ${{ github.event.pull_request.head.sha }}
-          RELEASE_TAG: ${{ inputs.tag }}
-          REQUIRE_MAIN: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
+          RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+          REQUIRE_MAIN: 'true'
+          MAIN_POLICY: ${{ github.event_name == 'push' && 'skip' || 'error' }}
         run: npm run release:stable-ref
 
       - name: Check out release revision

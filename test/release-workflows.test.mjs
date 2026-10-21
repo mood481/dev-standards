@@ -2,29 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { resolvePrereleasePlan } from '../tools/publish-prerelease.mjs';
-import { selectStableTag } from '../tools/stable-release-ref.mjs';
 
 import { packageVersions, prereleaseOf, releaseTag } from './helpers.mjs';
 
 const pkg = await packageVersions();
-
-test('selectStableTag ignores prereleases and returns one stable tag', () => {
-  assert.equal(
-    selectStableTag([
-      releaseTag(prereleaseOf(pkg.current, 'beta')),
-      releaseTag(pkg.current),
-    ]),
-    releaseTag(pkg.current),
-  );
-  assert.equal(selectStableTag([releaseTag(prereleaseOf(pkg.current, 'beta'))]), null);
-});
-
-test('selectStableTag rejects multiple stable tags on the same commit', () => {
-  assert.throws(
-    () => selectStableTag([releaseTag(pkg.previous), releaseTag(pkg.current)]),
-    /Expected at most one stable release tag/,
-  );
-});
 
 test('resolvePrereleasePlan accepts supported prerelease channels', () => {
   assert.equal(

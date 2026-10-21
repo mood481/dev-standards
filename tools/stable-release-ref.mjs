@@ -9,17 +9,6 @@ import { resolveRelease } from './release-version.mjs';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const stablePattern = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
-export function selectStableTag(tags) {
-  const matches = tags.filter((tag) => stablePattern.test(tag)).sort();
-  if (matches.length === 0) return null;
-  if (matches.length > 1) {
-    throw new Error(
-      `Expected at most one stable release tag, found: ${matches.join(', ')}`,
-    );
-  }
-  return matches[0];
-}
-
 function git(args, { allowFailure = false } = {}) {
   const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
   if (!allowFailure && result.status !== 0) {
@@ -39,53 +28,37 @@ async function writeOutput(values) {
 }
 
 async function run() {
-  const releaseSha = (process.env.RELEASE_SHA ?? '').trim();
-  const releaseTag = (process.env.RELEASE_TAG ?? '').trim();
-
-  if (Boolean(releaseSha) === Boolean(releaseTag)) {
-    throw new Error('Provide exactly one of RELEASE_SHA or RELEASE_TAG.');
+  const tag = (process.env.RELEASE_TAG ?? '').trim();
+  if (!tag) {
+    throw new Error('RELEASE_TAG is required.');
+  }
+  if (!stablePattern.test(tag)) {
+    throw new Error(
+      `Stable release tag must match v<major>.<minor>.<patch>: ${tag}`,
+    );
   }
 
   git(['fetch', '--tags', '--force', 'origin']);
+  const revision = git(['rev-list', '-n', '1', `refs/tags/${tag}`]).stdout.trim();
 
-  let tag;
-  let revision;
+  if (process.env.REQUIRE_MAIN === 'true') {
+    git(['fetch', '--no-tags', 'origin', 'main:refs/remotes/origin/main']);
+    const check = git(
+      ['merge-base', '--is-ancestor', revision, 'refs/remotes/origin/main'],
+      { allowFailure: true },
+    );
 
-  if (releaseTag) {
-    if (!stablePattern.test(releaseTag)) {
-      throw new Error(
-        `Stable release tag must match v<major>.<minor>.<patch>: ${releaseTag}`,
-      );
-    }
-
-    tag = releaseTag;
-    revision = git(['rev-list', '-n', '1', `refs/tags/${tag}`]).stdout.trim();
-
-    if (process.env.REQUIRE_MAIN === 'true') {
-      git(['fetch', '--no-tags', 'origin', 'main:refs/remotes/origin/main']);
-      const check = git(
-        ['merge-base', '--is-ancestor', revision, 'refs/remotes/origin/main'],
-        { allowFailure: true },
-      );
-      if (check.status !== 0) {
-        throw new Error(`Stable tag ${tag} is not contained in main.`);
+    if (check.status !== 0) {
+      if (process.env.MAIN_POLICY === 'skip') {
+        console.log(
+          `Stable tag ${tag} is not contained in main; publication skipped.`,
+        );
+        await writeOutput({ publish: 'false' });
+        return;
       }
-    }
-  } else {
-    const tags = git(['tag', '--points-at', releaseSha]).stdout
-      .split('\n')
-      .map((value) => value.trim())
-      .filter(Boolean);
 
-    tag = selectStableTag(tags);
-    if (tag === null) {
-      console.log(
-        `No stable release tag points at merged PR head ${releaseSha}; nothing to publish.`,
-      );
-      await writeOutput({ publish: 'false' });
-      return;
+      throw new Error(`Stable tag ${tag} is not contained in main.`);
     }
-    revision = releaseSha;
   }
 
   const packageJson = JSON.parse(
