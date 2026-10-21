@@ -2,10 +2,24 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { resolvePrereleasePlan } from '../tools/publish-prerelease.mjs';
+import { classifyAncestorResult } from '../tools/stable-release-ref.mjs';
 
 import { packageVersions, prereleaseOf, releaseTag } from './helpers.mjs';
 
 const pkg = await packageVersions();
+
+test('classifyAncestorResult distinguishes ancestor, non-ancestor and git errors', () => {
+  assert.equal(classifyAncestorResult({ status: 0 }), 'ancestor');
+  assert.equal(classifyAncestorResult({ status: 1 }), 'not-ancestor');
+
+  assert.throws(
+    () => classifyAncestorResult({
+      status: 128,
+      stderr: 'fatal: invalid commit reference',
+    }),
+    /failed with status 128: fatal: invalid commit reference/,
+  );
+});
 
 test('resolvePrereleasePlan accepts supported prerelease channels', () => {
   assert.equal(

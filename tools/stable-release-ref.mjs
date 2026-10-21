@@ -9,6 +9,16 @@ import { resolveRelease } from './release-version.mjs';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const stablePattern = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
+export function classifyAncestorResult({ status, stderr = '' }) {
+  if (status === 0) return 'ancestor';
+  if (status === 1) return 'not-ancestor';
+
+  const detail = stderr.trim();
+  throw new Error(
+    `git merge-base --is-ancestor failed with status ${status ?? 'unknown'}${detail ? `: ${detail}` : ''}`,
+  );
+}
+
 function git(args, { allowFailure = false } = {}) {
   const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
   if (!allowFailure && result.status !== 0) {
@@ -41,14 +51,28 @@ async function run() {
   git(['fetch', '--tags', '--force', 'origin']);
   const revision = git(['rev-list', '-n', '1', `refs/tags/${tag}`]).stdout.trim();
 
-  if (process.env.REQUIRE_MAIN === 'true') {
-    git(['fetch', '--no-tags', 'origin', 'main:refs/remotes/origin/main']);
-    const check = git(
-      ['merge-base', '--is-ancestor', revision, 'refs/remotes/origin/main'],
-      { allowFailure: true },
-    );
+  console.log(`Release tag:      ${tag}`);
+  console.log(`Release revision: ${revision}`);
 
-    if (check.status !== 0) {
+  if (process.env.REQUIRE_MAIN === 'true') {
+    git(['fetch', '--no-tags', 'origin', 'main']);
+    const mainRevision = git(['rev-parse', 'FETCH_HEAD']).stdout.trim();
+
+    console.log(`Main revision:    ${mainRevision}`);
+
+    let containment = 'ancestor';
+    if (revision === mainRevision) {
+      console.log('Release revision matches main.');
+    } else {
+      const check = git(
+        ['merge-base', '--is-ancestor', revision, mainRevision],
+        { allowFailure: true },
+      );
+      containment = classifyAncestorResult(check);
+      console.log(`Main containment: ${containment}`);
+    }
+
+    if (containment === 'not-ancestor') {
       if (process.env.MAIN_POLICY === 'skip') {
         console.log(
           `Stable tag ${tag} is not contained in main; publication skipped.`,
