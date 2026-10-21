@@ -10,10 +10,14 @@ import {
   loadCatalog,
   makeNextPackage,
   makeTarget,
+  packageVersions,
+  prereleaseOf,
   readConsumerManifest,
   readPackageVersion,
   run,
 } from './helpers.mjs';
+
+const pkg = await packageVersions();
 
 test('installs, extends and checks a consumer', async () => {
   const catalog = await loadCatalog();
@@ -85,7 +89,7 @@ test('installs hybrid context declared in catalog.json', async () => {
 
   const target = await makeTarget();
   const packageCli = await makeNextPackage(
-    '0.2.0-alpha.0',
+    prereleaseOf(pkg.nextMinor, 'alpha'),
     async (packageRoot) => {
       await mkdir(join(packageRoot, 'adrs'), { recursive: true });
       await writeFile(
@@ -153,7 +157,7 @@ test('install requires update before mixing package versions', async () => {
   let result = run(['install', ids[0], '--path', target]);
   assert.equal(result.status, 0, result.stderr);
 
-  const nextCli = await makeNextPackage('0.2.1-alpha.0');
+  const nextCli = await makeNextPackage(prereleaseOf(pkg.next, 'alpha'));
   result = run(['install', ids[1], '--path', target], nextCli);
   assert.equal(result.status, 1);
   assert.match(result.stderr, /run dev-standards update/);

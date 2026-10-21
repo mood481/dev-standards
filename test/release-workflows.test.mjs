@@ -4,47 +4,57 @@ import test from 'node:test';
 import { resolvePrereleasePlan } from '../tools/publish-prerelease.mjs';
 import { selectStableTag } from '../tools/stable-release-ref.mjs';
 
+import { packageVersions, prereleaseOf, releaseTag } from './helpers.mjs';
+
+const pkg = await packageVersions();
+
 test('selectStableTag ignores prereleases and returns one stable tag', () => {
   assert.equal(
-    selectStableTag(['v0.3.2-beta.0', 'v0.3.2']),
-    'v0.3.2',
+    selectStableTag([
+      releaseTag(prereleaseOf(pkg.current, 'beta')),
+      releaseTag(pkg.current),
+    ]),
+    releaseTag(pkg.current),
   );
-  assert.equal(selectStableTag(['v0.3.2-beta.0']), null);
+  assert.equal(selectStableTag([releaseTag(prereleaseOf(pkg.current, 'beta'))]), null);
 });
 
 test('selectStableTag rejects multiple stable tags on the same commit', () => {
   assert.throws(
-    () => selectStableTag(['v0.3.1', 'v0.3.2']),
+    () => selectStableTag([releaseTag(pkg.previous), releaseTag(pkg.current)]),
     /Expected at most one stable release tag/,
   );
 });
 
 test('resolvePrereleasePlan accepts supported prerelease channels', () => {
   assert.equal(
-    resolvePrereleasePlan('0.3.2', 'v0.3.2-devel.0').distTag,
+    resolvePrereleasePlan(pkg.current, releaseTag(prereleaseOf(pkg.current, 'devel'))).distTag,
     'devel',
   );
   assert.equal(
-    resolvePrereleasePlan('0.3.2', 'v0.3.2-alpha.0').distTag,
+    resolvePrereleasePlan(pkg.current, releaseTag(prereleaseOf(pkg.current, 'alpha'))).distTag,
     'next',
   );
   assert.equal(
-    resolvePrereleasePlan('0.3.2', 'v0.3.2-beta.1').distTag,
+    resolvePrereleasePlan(pkg.current, releaseTag(prereleaseOf(pkg.current, 'beta', 1))).distTag,
     'next',
   );
   assert.equal(
-    resolvePrereleasePlan('0.3.2', 'v0.3.2-rc.0').distTag,
+    resolvePrereleasePlan(pkg.current, releaseTag(prereleaseOf(pkg.current, 'rc'))).distTag,
     'next',
   );
 });
 
 test('resolvePrereleasePlan rejects stable and mismatched-core tags', () => {
   assert.throws(
-    () => resolvePrereleasePlan('0.3.2', 'v0.3.2'),
+    () => resolvePrereleasePlan(pkg.current, releaseTag(pkg.current)),
     /Expected a prerelease release tag/,
   );
   assert.throws(
-    () => resolvePrereleasePlan('0.3.2', 'v0.3.3-beta.0'),
+    () => resolvePrereleasePlan(
+      pkg.current,
+      releaseTag(prereleaseOf(pkg.next, 'beta')),
+    ),
     /does not share package semver core/,
   );
 });

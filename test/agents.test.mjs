@@ -9,6 +9,8 @@ import {
   loadCatalog,
   makeNextPackage,
   makeTarget,
+  packageVersions,
+  prereleaseOf,
   readConsumerManifest,
   root,
   run,
@@ -151,6 +153,7 @@ test('update across versions preserves an existing AGENTS.md', async () => {
   const entries = [...catalogLookup(catalog).entries()];
   assert.ok(entries.length >= 1, 'catalog needs at least one managed id');
   const [id, item] = entries[0];
+  const pkg = await packageVersions();
 
   const target = await makeTarget();
   let result = run(['install', id, '--path', target]);
@@ -159,7 +162,7 @@ test('update across versions preserves an existing AGENTS.md', async () => {
   const custom = '# Repository-owned instructions\n';
   await writeFile(join(target, 'AGENTS.md'), custom);
 
-  const nextCli = await makeNextPackage('0.3.2-alpha.0', async (packageRoot) => {
+  const nextCli = await makeNextPackage(prereleaseOf(pkg.next, 'alpha'), async (packageRoot) => {
     const path = join(packageRoot, item.source);
     const content = await readFile(path, 'utf8');
     await writeFile(path, `${content}\n<!-- next-version-test -->\n`);

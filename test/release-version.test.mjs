@@ -7,45 +7,62 @@ import {
   resolveRelease,
 } from '../tools/release-version.mjs';
 
+import { packageVersions, prereleaseOf, releaseTag } from './helpers.mjs';
+
+const pkg = await packageVersions();
+
 test('package version is always a stable release line', () => {
-  assert.equal(parsePackageVersion('0.3.1').core, '0.3.1');
+  assert.equal(parsePackageVersion(pkg.current).core, pkg.current);
   assert.throws(
-    () => parsePackageVersion('0.3.1-beta.0'),
+    () => parsePackageVersion(prereleaseOf(pkg.current, 'beta')),
     /stable release line/,
   );
 });
 
 test('release tags resolve stable and prerelease channels', () => {
-  assert.equal(parseReleaseTag('v0.3.1').distTag, 'latest');
-  assert.equal(parseReleaseTag('v0.3.1-devel.0').distTag, 'devel');
-  assert.equal(parseReleaseTag('v0.3.1-alpha.0').distTag, 'next');
-  assert.equal(parseReleaseTag('v0.3.1-beta.2').distTag, 'next');
-  assert.equal(parseReleaseTag('v0.3.1-rc.1').distTag, 'next');
+  assert.equal(parseReleaseTag(releaseTag(pkg.current)).distTag, 'latest');
+  assert.equal(
+    parseReleaseTag(releaseTag(prereleaseOf(pkg.current, 'devel'))).distTag,
+    'devel',
+  );
+  assert.equal(
+    parseReleaseTag(releaseTag(prereleaseOf(pkg.current, 'alpha'))).distTag,
+    'next',
+  );
+  assert.equal(
+    parseReleaseTag(releaseTag(prereleaseOf(pkg.current, 'beta', 2))).distTag,
+    'next',
+  );
+  assert.equal(
+    parseReleaseTag(releaseTag(prereleaseOf(pkg.current, 'rc'))).distTag,
+    'next',
+  );
 });
 
 test('release tags must match the package core and expected kind', () => {
   assert.equal(
     resolveRelease({
-      packageVersion: '0.3.1',
-      tag: 'v0.3.1',
+      packageVersion: pkg.current,
+      tag: releaseTag(pkg.current),
       kind: 'stable',
     }).version,
-    '0.3.1',
+    pkg.current,
   );
 
+  const beta = prereleaseOf(pkg.current, 'beta');
   assert.equal(
     resolveRelease({
-      packageVersion: '0.3.1',
-      tag: 'v0.3.1-beta.0',
+      packageVersion: pkg.current,
+      tag: releaseTag(beta),
       kind: 'prerelease',
     }).version,
-    '0.3.1-beta.0',
+    beta,
   );
 
   assert.throws(
     () => resolveRelease({
-      packageVersion: '0.3.1',
-      tag: 'v0.3.2-beta.0',
+      packageVersion: pkg.current,
+      tag: releaseTag(prereleaseOf(pkg.next, 'beta')),
       kind: 'prerelease',
     }),
     /does not share package semver core/,
@@ -53,8 +70,8 @@ test('release tags must match the package core and expected kind', () => {
 
   assert.throws(
     () => resolveRelease({
-      packageVersion: '0.3.1',
-      tag: 'v0.3.1',
+      packageVersion: pkg.current,
+      tag: releaseTag(pkg.current),
       kind: 'prerelease',
     }),
     /Expected a prerelease release tag/,

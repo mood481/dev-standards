@@ -20,7 +20,7 @@ Repository-specific operational documentation stays in the consuming repository.
   "schemaVersion": 1,
   "source": {
     "repository": "mood481/dev-standards",
-    "version": "0.3.1"
+    "version": "0.3.2"
   },
   "context": [
     {
@@ -209,7 +209,7 @@ npm run docs:serve
 `docs:serve` rebuilds with the pipeline defaults and serves the same artifact locally at `http://127.0.0.1:8080/dev-standards/`. Prereleases are explicit local publications rather than GitHub Actions runs. First set `package.json` to the intended stable release line `X.Y.Z`; then, from a clean checkout with the Gitea registry and `GITEA_TOKEN` configured, run a prerelease tag on that same core, for example:
 
 ```bash
-npm run prerelease:publish -- v0.3.1-beta.0
+npm run prerelease:publish -- v0.3.2-beta.0
 ```
 
 The command validates the prerelease tag against the package release line, checks the Git worktree and tag, runs tests/catalog/package validation, creates the tag locally when necessary, builds and publishes a temporary package stamped with the prerelease version, and only then pushes the tag to origin. If package publication fails, a newly created local tag is removed and no remote tag is left behind.

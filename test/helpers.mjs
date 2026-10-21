@@ -125,3 +125,52 @@ export async function readConsumerManifest(target) {
 export async function readPackageVersion() {
   return JSON.parse(await readFile(join(root, 'package.json'), 'utf8')).version;
 }
+
+// Version fixtures: tests read the live release line from package.json and
+// derive neighbouring versions from it (previous line, next line, prereleases)
+// instead of hardcoding the current version. Bumping package.json therefore
+// moves every release-version test along with it.
+
+export function splitStableVersion(version) {
+  const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(version);
+  if (!match) {
+    throw new Error(`package.json must hold a stable x.y.z release line: ${version}`);
+  }
+  return {
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3]),
+  };
+}
+
+export function nextVersion(version, part = 'patch') {
+  const { major, minor, patch } = splitStableVersion(version);
+  return part === 'minor' ? `${major}.${minor + 1}.0` : `${major}.${minor}.${patch + 1}`;
+}
+
+export function previousVersion(version) {
+  const { major, minor, patch } = splitStableVersion(version);
+  if (patch > 0) return `${major}.${minor}.${patch - 1}`;
+  if (minor > 0) return `${major}.${minor - 1}.0`;
+  if (major > 0) return `${major - 1}.0.0`;
+  throw new Error(`No stable release line precedes ${version}`);
+}
+
+export function prereleaseOf(version, channel, number = 0) {
+  splitStableVersion(version);
+  return `${version}-${channel}.${number}`;
+}
+
+export function releaseTag(version) {
+  return `v${version}`;
+}
+
+export async function packageVersions() {
+  const current = await readPackageVersion();
+  return {
+    current,
+    previous: previousVersion(current),
+    next: nextVersion(current),
+    nextMinor: nextVersion(current, 'minor'),
+  };
+}
