@@ -17,12 +17,12 @@ Keep commit history concise, consistent, machine-readable and useful for review,
 - No numeric length limit is imposed; the constraint is semantic.
 - A commit SHOULD represent one coherent step.
 - Unrelated formatting, cleanup, dependency upgrades or fixes MUST NOT be mixed into a functional commit.
-- Agents that materially create a commit SHOULD add a `Model: <agent> - <model> - <variant> - <reasoning-effort>` trailer.
-- Trailer values MUST be real and verifiable.
-- `<variant>` and `<reasoning-effort>` are optional and can be omitted; invented or `-` or `unknown` values MUST NOT be written.
-- When `<agent>` or `<model>` of the trailer data is missing or unavailable, the complete trailer is omitted.
+- Agents MAY add a `Model: <model>` trailer when the model identity is directly available from authoritative runtime or tool metadata.
+- Model trailer values MUST NOT be inferred, guessed or completed from partial information.
+- The `Model:` trailer is informational and MUST NOT be treated as authoritative execution provenance.
+- Repositories with an authoritative execution or provenance system SHOULD rely on that system rather than duplicating or approximating richer provenance in commit messages.
 - Trailers are exempt from the restrictions that apply to the explanatory body.
 
 ## Verification
 
-The commit message conforms to Conventional Commits, its subject is concise, its body is omitted or limited to non-evident rationale without inventories, narration or filler, and any trailers are accurate and complete.
+The commit message conforms to Conventional Commits, its subject is concise, its body is omitted or limited to non-evident rationale without inventories, narration or filler, and any informational trailers contain only directly available data.

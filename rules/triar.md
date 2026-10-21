@@ -22,6 +22,13 @@ Define repository expectations when TRIAR is adopted as the canonical task workf
 - Validation performed only after `task complete` MUST NOT be used to justify the transition to done.
 - Failed independent verification returns work to the appropriate rework flow; rework MUST correct verified non-conformities and their strictly derived effects without arbitrarily rewriting the frozen contract.
 
+## Commit traceability
+
+- Commits that implement or rework an active TRIAR task MUST include a `Task: <task-id>` trailer.
+- `<task-id>` MUST be the canonical task identifier exposed by TRIAR for the task whose frozen contract governs the change.
+- Task traceability MUST NOT be replaced by commit subject/body conventions or inferred from branch names.
+- The `Task:` trailer is part of the task traceability contract and is independent from optional informational provenance such as `Model:`.
+
 ## Independent verification
 
 - The actor that performs an implementation MUST NOT perform the independent `task check` used to accept that same implementation.
