@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "source": {
     "repository": "mood481/dev-standards",
-    "version": "0.3.2"
+    "version": "0.3.3"
   },
   "context": [
     {
@@ -15,7 +15,7 @@
       "type": "guide",
       "id": "ts-js",
       "path": "docs/guides/typescript-javascript.md",
-      "integrity": "sha256:69b27cb93e76492b6c7409ddeb70df5ab728fc69845ffe5b52e136f68cee8e3c"
+      "integrity": "sha256:9212716d328fd31c8f8707d05efd77a009d65f3fd32034a2fec9b2816cfa1770"
     },
     {
       "type": "operation",
