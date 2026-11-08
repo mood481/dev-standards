@@ -13,7 +13,7 @@ weight: 40
   "schemaVersion": 1,
   "source": {
     "repository": "mood481/dev-standards",
-    "version": "0.3.3"
+    "version": "0.4.0"
   },
   "context": [
     {
@@ -40,6 +40,6 @@ The registered context types are:
 - `runbook` — operational procedures under `docs/runbooks/`.
 - `reference` — supporting technical reference under `docs/references/`.
 
-These six values are the complete vocabulary for schema version `1`. Rules and guides are always package-managed, while operations are always consumer-owned. ADRs, runbooks and references support both models: an entry with `integrity` is package-managed and listed in `catalog.json`; an entry without it is consumer-owned and discovered by the installer in its conventional directory.
+These six values are the complete vocabulary for schema version `1`. Rules and guides are always package-managed, while operations are always consumer-owned. ADRs, runbooks and references support both models: an entry with `integrity` is package-managed and listed in `catalog.json`; an entry without it is consumer-owned. Consumer-owned files in the conventional type directories are auto-discovered, while explicit consumer-owned entries may point to another safe Markdown path under `docs/` and are preserved across updates.
 
 The schema is published as `schemas/manifest.schema.json`, and a complete package example is available as `schemas/manifest.example.json`.

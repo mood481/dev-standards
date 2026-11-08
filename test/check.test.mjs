@@ -35,7 +35,7 @@ test('check detects local drift and changed operations', async () => {
   result = run(['check', '--path', target]);
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Local drift detected/);
-  assert.match(result.stderr, /Manifest consumer-owned context does not match/);
+  assert.match(result.stderr, /Unindexed consumer-owned context: operation\/validation \(docs\/operations\/validation\.md\)/);
 });
 
 test('indexes and checks the supported consumer-owned context types', async () => {
@@ -118,5 +118,59 @@ test('rejects context types outside the schema vocabulary', async () => {
 
   result = run(['check', '--path', target]);
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /invalid context entry/);
+  assert.match(result.stderr, /Invalid manifest context entry at context\[/);
+  assert.match(result.stderr, /unsupported context type: architecture/);
+});
+
+
+test('accepts explicit consumer-owned context outside conventional discovery directories', async () => {
+  const catalog = await loadCatalog();
+  const managedId = [...catalogLookup(catalog).keys()][0];
+  const target = await makeTarget();
+
+  let result = run(['install', managedId, '--path', target]);
+  assert.equal(result.status, 0, result.stderr);
+
+  await mkdir(join(target, 'docs', 'architecture'), { recursive: true });
+  await writeFile(
+    join(target, 'docs', 'architecture', 'runtime-persistence.md'),
+    '# Runtime persistence\n',
+  );
+
+  const manifestPath = join(target, 'docs', 'manifest.json');
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  manifest.context.push({
+    type: 'adr',
+    id: 'runtime-persistence',
+    path: 'docs/architecture/runtime-persistence.md',
+  });
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  result = run(['check', '--path', target]);
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test('check reports the exact missing consumer-owned document', async () => {
+  const catalog = await loadCatalog();
+  const managedId = [...catalogLookup(catalog).keys()][0];
+  const target = await makeTarget();
+
+  let result = run(['install', managedId, '--path', target]);
+  assert.equal(result.status, 0, result.stderr);
+
+  const manifestPath = join(target, 'docs', 'manifest.json');
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  manifest.context.push({
+    type: 'reference',
+    id: 'runtime-domain-contracts',
+    path: 'docs/architecture/runtime-domain-contracts.md',
+  });
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  result = run(['check', '--path', target]);
+  assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /Missing consumer-owned context document: reference\/runtime-domain-contracts \(docs\/architecture\/runtime-domain-contracts\.md\)/,
+  );
 });

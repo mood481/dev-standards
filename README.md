@@ -9,7 +9,7 @@ The repository separates:
 - `schemas/`: machine-readable adoption contracts.
 - `templates/`: small consumer entrypoints such as `AGENTS.md`.
 
-Repository-specific operational documentation stays in the consuming repository. The CLI records existing `docs/operations/*.md` files in the consumer manifest but does not copy or own them.
+Repository-specific documentation stays in the consuming repository. The CLI auto-discovers consumer-owned Markdown files in the conventional `docs/operations/`, `docs/adrs/`, `docs/runbooks/` and `docs/references/` directories, while explicit consumer-owned manifest entries may point to other safe `docs/**/*.md` paths.
 
 ## Manifest
 
@@ -20,7 +20,7 @@ Repository-specific operational documentation stays in the consuming repository.
   "schemaVersion": 1,
   "source": {
     "repository": "mood481/dev-standards",
-    "version": "0.3.3"
+    "version": "0.4.0"
   },
   "context": [
     {
@@ -47,7 +47,7 @@ The registered context types are:
 - `runbook` — operational procedures under `docs/runbooks/`.
 - `reference` — supporting technical reference under `docs/references/`.
 
-These six values are the complete vocabulary for schema version `1`; product requirements, user stories and similar documents remain outside this repository's scope. Rules and guides are always package-managed, while operations are always consumer-owned. ADRs, runbooks and references support both models: an entry with `integrity` is package-managed and listed in `catalog.json`; an entry without it is consumer-owned and discovered by the installer in its conventional directory.
+These six values are the complete vocabulary for schema version `1`; product requirements, user stories and similar documents remain outside this repository's scope. Rules and guides are always package-managed, while operations are always consumer-owned. ADRs, runbooks and references support both models: an entry with `integrity` is package-managed and listed in `catalog.json`; an entry without it is consumer-owned. Conventional type directories are auto-discovered, while explicit consumer-owned entries may reference another safe Markdown path under `docs/` and are preserved across installs and updates.
 
 The schema is published as `schemas/manifest.schema.json`, and a complete package example is available as `schemas/manifest.example.json`. A separate example-install command is unnecessary because every normal `install` already writes a real `docs/manifest.json` for the selected standards and local context.
 
@@ -155,7 +155,7 @@ Validate the installed manifest, selected files and locally indexed context:
 pnpm dlx @mood481/dev-standards@latest check
 ```
 
-`check` fails when a package-managed document is missing or modified, when the manifest context does not match the selection, or when consumer-owned documents in the four indexed directories change without refreshing the manifest. Absence of `AGENTS.md` is normal: `check` reports no warning and fails for no reason solely because the file is missing. `AGENTS.md` stays outside `docs/manifest.json` and integrity tracking, so the manifest remains fully usable in repositories that intentionally have no `AGENTS.md`.
+`check` fails when a package-managed document is missing or modified, when the managed manifest context does not match the selection, when an indexed consumer-owned document is missing, or when an auto-discovered consumer-owned document is not indexed. Diagnostics identify the specific context id and path. Absence of `AGENTS.md` is normal: `check` reports no warning and fails for no reason solely because the file is missing. `AGENTS.md` stays outside `docs/manifest.json` and integrity tracking, so the manifest remains fully usable in repositories that intentionally have no `AGENTS.md`.
 
 ## Update
 
@@ -171,7 +171,7 @@ The updater:
 2. refuses downgrades;
 3. refuses to overwrite any standard whose local content no longer matches its installed hash;
 4. replaces unchanged installed standards with the target package contents;
-5. refreshes managed and consumer-owned context entries together with the exact source version.
+5. refreshes managed standards, preserves explicit consumer-owned context links, merges auto-discovered conventional context, and records the exact source version.
 
 This makes updates conservative: local divergence is surfaced as a conflict instead of being discarded. `update` never creates `AGENTS.md` implicitly and preserves any existing `AGENTS.md`.
 
@@ -209,7 +209,7 @@ npm run docs:serve
 `docs:serve` rebuilds with the pipeline defaults and serves the same artifact locally at `http://127.0.0.1:8080/dev-standards/`. Prereleases are explicit local publications rather than GitHub Actions runs. First set `package.json` to the intended stable release line `X.Y.Z`; then, from a clean checkout with the Gitea registry and `GITEA_TOKEN` configured, run a prerelease tag on that same core, for example:
 
 ```bash
-npm run prerelease:publish -- v0.3.3-beta.0
+npm run prerelease:publish -- v0.4.0-beta.0
 ```
 
 The command validates the prerelease tag against the package release line, checks the Git worktree and tag, runs tests/catalog/package validation, creates the tag locally when necessary, builds and publishes a temporary package stamped with the prerelease version, and only then pushes the tag to origin. If package publication fails, a newly created local tag is removed and no remote tag is left behind.

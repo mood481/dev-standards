@@ -190,7 +190,7 @@ async function install({ repository, ids, agents }) {
     }
   }
 
-  await writeConsumerManifest(repository, plan);
+  await writeConsumerManifest(repository, plan, existingManifest);
   if (agents) {
     await ensureAgents(repository);
   }
@@ -206,9 +206,7 @@ async function check({ repository }) {
   const managedContexts = manifest.context.filter((entry) => entry.integrity);
   const manifestPaths = managedContexts.map((entry) => entry.path).sort();
   if (!sameArray(expectedPaths, manifestPaths)) {
-    issues.push(
-      'Manifest context does not match the selected managed documents.',
-    );
+    issues.push('Manifest managed context does not match the selected standards.');
   }
 
   for (const relativePath of expectedPaths) {
@@ -229,21 +227,34 @@ async function check({ repository }) {
     }
   }
 
-  const consumerContext = await discoverConsumerContext(
-    repository,
-    manifestPaths,
+  const consumerEntries = manifest.context.filter((entry) => !entry.integrity);
+  const indexedByPath = new Map(
+    consumerEntries.map((entry) => [entry.path, entry]),
   );
-  const indexedConsumerPaths = manifest.context
-    .filter((entry) => !entry.integrity)
-    .map((entry) => entry.path)
-    .sort();
-  if (!sameArray(
-    consumerContext.map((entry) => entry.path).sort(),
-    indexedConsumerPaths,
-  )) {
-    issues.push(
-      'Manifest consumer-owned context does not match its docs directories.',
-    );
+
+  for (const entry of consumerEntries) {
+    if (!(await exists(join(repository, entry.path)))) {
+      issues.push(
+        `Missing consumer-owned context document: ${entry.type}/${entry.id} (${entry.path})`,
+      );
+    }
+  }
+
+  const discovered = await discoverConsumerContext(repository, manifestPaths);
+  for (const entry of discovered) {
+    const indexed = indexedByPath.get(entry.path);
+    if (!indexed) {
+      issues.push(
+        `Unindexed consumer-owned context: ${entry.type}/${entry.id} (${entry.path})`,
+      );
+      continue;
+    }
+
+    if (indexed.type !== entry.type || indexed.id !== entry.id) {
+      issues.push(
+        `Consumer-owned context mismatch for ${entry.path}: manifest has ${indexed.type}/${indexed.id}, autodiscovery expects ${entry.type}/${entry.id}`,
+      );
+    }
   }
 
   if (issues.length > 0) {
@@ -292,7 +303,7 @@ async function update({ repository }) {
     }
   }
 
-  await writeConsumerManifest(repository, plan);
+  await writeConsumerManifest(repository, plan, manifest);
 
   if (comparison === 0) {
     console.log(`current\t${packageJson.version}`);
@@ -393,6 +404,7 @@ async function planSelectedStandards(repository, selected, options) {
 async function writeConsumerManifest(
   repository,
   plan,
+  existingManifest,
 ) {
   const managedContext = plan.map((item) => ({
     type: catalog.get(item.id).type,
@@ -400,13 +412,34 @@ async function writeConsumerManifest(
     path: item.relativePath,
     integrity: item.hash,
   }));
-  const consumerContext = await discoverConsumerContext(
+  const managedPaths = managedContext.map((entry) => entry.path);
+  const preservedConsumerContext = (existingManifest?.context ?? [])
+    .filter((entry) => !entry.integrity);
+  const discoveredConsumerContext = await discoverConsumerContext(
     repository,
-    managedContext.map((entry) => entry.path),
+    managedPaths,
   );
+
+  const consumerByPath = new Map();
+  for (const entry of [
+    ...preservedConsumerContext,
+    ...discoveredConsumerContext,
+  ]) {
+    const existing = consumerByPath.get(entry.path);
+    if (
+      existing &&
+      (existing.type !== entry.type || existing.id !== entry.id)
+    ) {
+      throw new Error(
+        `Consumer-owned context collision for ${entry.path}: ${existing.type}/${existing.id} conflicts with ${entry.type}/${entry.id}`,
+      );
+    }
+    consumerByPath.set(entry.path, entry);
+  }
+
   const context = [
     ...managedContext,
-    ...consumerContext,
+    ...consumerByPath.values(),
   ].sort(compareContextEntries);
 
   const manifest = {
@@ -457,28 +490,29 @@ async function readManifest(repository, { required }) {
 
   const contextKeys = new Set();
   const contextPaths = new Set();
-  for (const entry of value.context) {
-    if (!isContextEntry(entry)) {
+  for (const [index, entry] of value.context.entries()) {
+    const structuralIssue = contextEntryIssue(entry);
+    if (structuralIssue) {
       throw new Error(
-        'Existing docs/manifest.json contains an invalid context entry.',
+        `Invalid manifest context entry at context[${index}]: ${structuralIssue}; entry=${describeContextEntry(entry)}`,
       );
     }
 
     const key = `${entry.type}\0${entry.id}`;
-    if (contextKeys.has(key) || contextPaths.has(entry.path)) {
-      throw new Error(
-        `Existing manifest contains duplicate context: ${entry.type}/${entry.id}`,
-      );
+    if (contextKeys.has(key)) {
+      throw new Error(`Duplicate manifest context id: ${entry.type}/${entry.id}`);
+    }
+    if (contextPaths.has(entry.path)) {
+      throw new Error(`Duplicate manifest context path: ${entry.path}`);
     }
     contextKeys.add(key);
     contextPaths.add(entry.path);
 
     const item = catalog.get(entry.id);
     const ownership = contextTypes.get(entry.type).ownership;
-    const directory = contextTypes.get(entry.type).directory;
     if (ownership === 'consumer' && entry.integrity) {
       throw new Error(
-        `Consumer-owned context cannot declare integrity: ${entry.type}/${entry.id}`,
+        `Consumer-owned context cannot declare integrity: ${entry.type}/${entry.id} (${entry.path})`,
       );
     }
 
@@ -489,23 +523,94 @@ async function readManifest(repository, { required }) {
         !entry.integrity
       ) {
         throw new Error(
-          `Existing manifest references an invalid managed ${entry.type}: ${entry.id}`,
+          `Invalid managed context: ${entry.type}/${entry.id} (${entry.path}); expected the current catalog path and an integrity hash.`,
         );
       }
     } else {
-      // Consumer-owned entries (operations and hybrid types without
-      // integrity) are discovered from filenames, so id and path stay
-      // coupled here. Managed entries are validated against the catalog
-      // above and may decouple id from filename.
-      if (entry.path !== `docs/${directory}/${entry.id}.md`) {
+      const expectedFilename = `${entry.id}.md`;
+      if (!entry.path.endsWith(`/${expectedFilename}`)) {
         throw new Error(
-          `Existing manifest references an invalid consumer-owned ${entry.type}: ${entry.id}`,
+          `Invalid consumer-owned context: ${entry.type}/${entry.id} (${entry.path}); the file name must be ${expectedFilename}.`,
         );
       }
     }
   }
 
   return value;
+}
+
+function describeContextEntry(entry) {
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+    return JSON.stringify(entry);
+  }
+
+  const type = typeof entry.type === 'string' ? entry.type : '?';
+  const id = typeof entry.id === 'string' ? entry.id : '?';
+  const path = typeof entry.path === 'string' ? entry.path : '?';
+  return `${type}/${id} (${path})`;
+}
+
+function contextEntryIssue(entry) {
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+    return 'entry must be an object';
+  }
+  if (typeof entry.type !== 'string' || !contextTypes.has(entry.type)) {
+    return `unsupported context type: ${String(entry.type)}`;
+  }
+  if (
+    typeof entry.id !== 'string' ||
+    !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(entry.id)
+  ) {
+    return `invalid context id: ${String(entry.id)}`;
+  }
+  if (typeof entry.path !== 'string') {
+    return 'path must be a string';
+  }
+  if (
+    entry.integrity !== undefined &&
+    !/^sha256:[a-f0-9]{64}$/.test(entry.integrity)
+  ) {
+    return `invalid integrity value for ${entry.type}/${entry.id}`;
+  }
+  const unknownKey = Object.keys(entry).find(
+    (key) => !['type', 'id', 'path', 'integrity'].includes(key),
+  );
+  if (unknownKey) {
+    return `unsupported property: ${unknownKey}`;
+  }
+
+  const managed = contextTypes.get(entry.type).ownership === 'managed' ||
+    entry.integrity !== undefined;
+  if (managed) {
+    const directory = contextTypes.get(entry.type).directory;
+    const prefix = `docs/${directory}/`;
+    if (!isSafeMarkdownPath(entry.path, prefix)) {
+      return `managed ${entry.type} path must be a safe .md path under ${prefix}`;
+    }
+  } else {
+    if (!isSafeMarkdownPath(entry.path, 'docs/')) {
+      return 'consumer-owned path must be a safe .md path under docs/';
+    }
+    if (
+      entry.path.startsWith('docs/rules/') ||
+      entry.path.startsWith('docs/guides/')
+    ) {
+      return 'consumer-owned context cannot use the managed docs/rules or docs/guides directories';
+    }
+  }
+
+  return null;
+}
+
+function isSafeMarkdownPath(path, prefix) {
+  if (!path.startsWith(prefix) || !path.endsWith('.md')) {
+    return false;
+  }
+
+  const rest = path.slice(prefix.length);
+  return Boolean(rest) &&
+    !rest.includes('\\') &&
+    !rest.split('/').some((part) => !part || part === '.' || part === '..');
 }
 
 async function discoverConsumerContext(repository, excludedPaths = []) {
@@ -627,39 +732,7 @@ function buildCatalog(value) {
 }
 
 function isContextEntry(entry) {
-  if (
-    !entry ||
-    typeof entry !== 'object' ||
-    Array.isArray(entry) ||
-    typeof entry.type !== 'string' ||
-    !contextTypes.has(entry.type) ||
-    typeof entry.id !== 'string' ||
-    !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(entry.id) ||
-    typeof entry.path !== 'string' ||
-    (
-      entry.integrity !== undefined &&
-      !/^sha256:[a-f0-9]{64}$/.test(entry.integrity)
-    ) ||
-    Object.keys(entry).some(
-      (key) => !['type', 'id', 'path', 'integrity'].includes(key),
-    )
-  ) {
-    return false;
-  }
-
-  // Syntactic check only: the path must live under the type directory.
-  // Semantic coupling (id === filename) applies solely to consumer-owned
-  // entries and is enforced in readManifest; managed entries may decouple
-  // id from filename via catalog.json.
-  const directory = contextTypes.get(entry.type).directory;
-  const prefix = `docs/${directory}/`;
-  if (!entry.path.startsWith(prefix) || !entry.path.endsWith('.md')) {
-    return false;
-  }
-  const rest = entry.path.slice(prefix.length);
-  return Boolean(rest) &&
-    !rest.includes('\\') &&
-    !rest.split('/').some((part) => !part || part === '.' || part === '..');
+  return contextEntryIssue(entry) === null;
 }
 
 function compareContextEntries(left, right) {
