@@ -178,3 +178,42 @@ test('preserves an existing AGENTS.md', async () => {
     '# Existing instructions\n',
   );
 });
+
+
+test('installs the React Native + Expo guide without implicit ts-js installation', async () => {
+  const catalog = await loadCatalog();
+  assert.equal(
+    catalog.guide?.['react-native-expo'],
+    'guides/react-native-expo.md',
+  );
+
+  const listed = run(['list']);
+  assert.equal(listed.status, 0, listed.stderr);
+  assert.match(listed.stdout, /^guide\treact-native-expo$/m);
+
+  const target = await makeTarget();
+  let result = run(['install', 'react-native-expo', '--path', target]);
+  assert.equal(result.status, 0, result.stderr);
+  result = run(['check', '--path', target]);
+  assert.equal(result.status, 0, result.stderr);
+
+  let manifest = await readConsumerManifest(target);
+  assert.deepEqual(manifest.context.map((entry) => entry.id), ['react-native-expo']);
+
+  const guidePath = join(target, 'docs', 'guides', 'react-native-expo.md');
+  const guide = await readFile(guidePath, 'utf8');
+  assert.match(guide, /^# React Native \+ Expo guide$/m);
+  assert.match(guide, /Consumers SHOULD install both guides explicitly/);
+  assert.match(guide, /does not imply using EAS Build or EAS Update/);
+
+  result = run(['install', 'ts-js', '--path', target]);
+  assert.equal(result.status, 0, result.stderr);
+  result = run(['check', '--path', target]);
+  assert.equal(result.status, 0, result.stderr);
+
+  manifest = await readConsumerManifest(target);
+  assert.deepEqual(
+    manifest.context.map((entry) => entry.id),
+    ['react-native-expo', 'ts-js'],
+  );
+});

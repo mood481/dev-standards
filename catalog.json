@@ -12,7 +12,8 @@
     "pocketbase": "guides/pocketbase.md",
     "go": "guides/go.md",
     "nx-pnpm": "guides/nx-pnpm.md",
-    "lit": "guides/lit-web-components.md"
+    "lit": "guides/lit-web-components.md",
+    "react-native-expo": "guides/react-native-expo.md"
   },
   "adr": {},
   "runbook": {},

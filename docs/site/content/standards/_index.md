@@ -24,5 +24,6 @@ The catalog is the machine-readable source of truth for package-managed context 
 - [go](guides/go/) — Go.
 - [nx-pnpm](guides/nx-pnpm/) — Nx with pnpm.
 - [lit](guides/lit/) — Lit web components.
+- [react-native-expo](guides/react-native-expo/) — React Native, TypeScript and Expo.
 
 The `adr`, `runbook` and `reference` catalog maps are currently empty and ready for shared documents when needed. See the [manifest contract](manifest/) for how package-managed and consumer-owned entries combine in `docs/manifest.json`.
