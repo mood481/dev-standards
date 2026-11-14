@@ -20,7 +20,7 @@ Repository-specific documentation stays in the consuming repository. The CLI aut
   "schemaVersion": 1,
   "source": {
     "repository": "mood481/dev-standards",
-    "version": "0.4.0"
+    "version": "0.4.1"
   },
   "context": [
     {
@@ -71,6 +71,7 @@ The schema is published as `schemas/manifest.schema.json`, and a complete packag
 - `go`
 - `nx-pnpm`
 - `lit`
+- `react-native-expo` — React Native with TypeScript and Expo; adopt alongside `ts-js`.
 
 ## Registry setup
 
@@ -111,6 +112,16 @@ pnpm dlx @mood481/dev-standards@latest install \
   pocketbase \
   nx-pnpm
 ```
+
+For new React Native + Expo projects, select both the general TypeScript guide and the mobile guide explicitly (the CLI does not resolve guide dependencies):
+
+```bash
+pnpm dlx @mood481/dev-standards@latest install \
+  devel quality commits pull-requests \
+  ts-js react-native-expo
+```
+
+Expo supplies development tooling and native configuration; CI/CD, signing, distribution and update services remain project-owned and are not prescribed by this guide.
 
 Use `--path <repository>` to target another checkout. Use `--agents` to also create `AGENTS.md` from the packaged template when it does not exist.
 
@@ -209,7 +220,7 @@ npm run docs:serve
 `docs:serve` rebuilds with the pipeline defaults and serves the same artifact locally at `http://127.0.0.1:8080/dev-standards/`. Prereleases are explicit local publications rather than GitHub Actions runs. First set `package.json` to the intended stable release line `X.Y.Z`; then, from a clean checkout with the Gitea registry and `GITEA_TOKEN` configured, run a prerelease tag on that same core, for example:
 
 ```bash
-npm run prerelease:publish -- v0.4.0-beta.0
+npm run prerelease:publish -- v0.4.1-beta.0
 ```
 
 The command validates the prerelease tag against the package release line, checks the Git worktree and tag, runs tests/catalog/package validation, creates the tag locally when necessary, builds and publishes a temporary package stamped with the prerelease version, and only then pushes the tag to origin. If package publication fails, a newly created local tag is removed and no remote tag is left behind.
