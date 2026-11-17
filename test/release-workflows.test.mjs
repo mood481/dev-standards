@@ -65,5 +65,5 @@ test('docs stable tag deployment is independent of main ancestry', async () => {
   assert.match(docs, /REQUIRE_MAIN: 'false'/);
   assert.doesNotMatch(docs, /MAIN_POLICY:/);
   assert.match(pkg, /REQUIRE_MAIN: 'true'/);
-  assert.match(stableRef, /git\(\['show', `${revision}:package\.json`\]\)/);
+  assert.ok(stableRef.includes("git(['show', `${revision}:package.json`])"));
 });
