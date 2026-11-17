@@ -1,7 +1,7 @@
 # Stable docsite publication to the tools-docs aggregator.
 #
 # Stable releases are tag-driven. A pushed v<major>.<minor>.<patch> tag
-# publishes documentation only when the tagged commit is contained in main.
+# publishes the docs from that exact revision regardless of branch containment.
 # workflow_dispatch is retained for recovery/backfill.
 name: docs-publish
 
@@ -34,8 +34,7 @@ jobs:
         id: release_ref
         env:
           RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
-          REQUIRE_MAIN: 'true'
-          MAIN_POLICY: ${{ github.event_name == 'push' && 'skip' || 'error' }}
+          REQUIRE_MAIN: 'false'
         run: npm run release:stable-ref
 
       - name: Check out release revision

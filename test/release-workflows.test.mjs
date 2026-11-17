@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 import { resolvePrereleasePlan } from '../tools/publish-prerelease.mjs';
 import { classifyAncestorResult } from '../tools/stable-release-ref.mjs';
 
-import { packageVersions, prereleaseOf, releaseTag } from './helpers.mjs';
+import { packageVersions, prereleaseOf, releaseTag, root } from './helpers.mjs';
 
 const pkg = await packageVersions();
 
@@ -52,4 +54,16 @@ test('resolvePrereleasePlan rejects stable and mismatched-core tags', () => {
     ),
     /does not share package semver core/,
   );
+});
+
+test('docs stable tag deployment is independent of main ancestry', async () => {
+  const docs = await readFile(join(root, '.github/workflows/docs-publish.yml'), 'utf8');
+  const pkg = await readFile(join(root, '.github/workflows/publish.yml'), 'utf8');
+  const stableRef = await readFile(join(root, 'tools/stable-release-ref.mjs'), 'utf8');
+
+  assert.match(docs, /tags:[\s\S]*?v\*\.\*\.\*/);
+  assert.match(docs, /REQUIRE_MAIN: 'false'/);
+  assert.doesNotMatch(docs, /MAIN_POLICY:/);
+  assert.match(pkg, /REQUIRE_MAIN: 'true'/);
+  assert.match(stableRef, /git\(\['show', `${revision}:package\.json`\]\)/);
 });

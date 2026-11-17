@@ -1,4 +1,4 @@
-import { appendFile, readFile } from 'node:fs/promises';
+import { appendFile } from 'node:fs/promises';
 import { realpathSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
@@ -85,8 +85,9 @@ async function run() {
     }
   }
 
+  // Validate against the tagged artifact, not the dispatch branch's package.json.
   const packageJson = JSON.parse(
-    await readFile(resolve(root, 'package.json'), 'utf8'),
+    git(['show', `${revision}:package.json`]).stdout,
   );
 
   resolveRelease({
