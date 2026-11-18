@@ -13,14 +13,14 @@ weight: 40
   "schemaVersion": 1,
   "source": {
     "repository": "mood481/dev-standards",
-    "version": "0.4.1"
+    "version": "0.5.0"
   },
   "context": [
     {
       "type": "rule",
       "id": "devel",
       "path": "docs/rules/development.md",
-      "integrity": "sha256:7595d41ab4f88e7dfec9647a0165cc023a6502f05733b0d21fe9914abf9ea254"
+      "integrity": "sha256:b4dfb5446d052359040bdec4c73418280dfe3591420923fe4c3257196438d5b4"
     },
     {
       "type": "operation",

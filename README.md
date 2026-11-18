@@ -20,14 +20,14 @@ Repository-specific documentation stays in the consuming repository. The CLI aut
   "schemaVersion": 1,
   "source": {
     "repository": "mood481/dev-standards",
-    "version": "0.4.1"
+    "version": "0.5.0"
   },
   "context": [
     {
       "type": "rule",
       "id": "devel",
       "path": "docs/rules/development.md",
-      "integrity": "sha256:7595d41ab4f88e7dfec9647a0165cc023a6502f05733b0d21fe9914abf9ea254"
+      "integrity": "sha256:b4dfb5446d052359040bdec4c73418280dfe3591420923fe4c3257196438d5b4"
     },
     {
       "type": "operation",
@@ -186,6 +186,12 @@ The updater:
 
 This makes updates conservative: local divergence is surfaced as a conflict instead of being discarded. `update` never creates `AGENTS.md` implicitly and preserves any existing `AGENTS.md`.
 
+## Task branches and pull requests
+
+Ordinary development tasks use a dedicated `feature/<task>` branch for functionality, improvements, documentation, refactoring and maintenance, or a `bugfix/<defect>` branch for a defect already present in `devel`. Task branches normally start from `devel`, and bugfix PRs always target `devel` without stacking. A genuinely dependent feature stage may use an explicitly documented stacked PR; ordinary task iterations stay in one branch and PR. The promotion of `devel` to `main` remains a separate, authorized integration/release operation.
+
+Before the first push, contributors should consolidate their own unshared checkpoint commits when they only refine one cohesive task outcome. Published, shared or reviewed history is never rewritten automatically. See the installed `devel`, `pull-requests` and `commits` rules for the complete safeguards and merge strategy.
+
 ## Version channels
 
 - `devel` — development prereleases.
@@ -220,7 +226,7 @@ npm run docs:serve
 `docs:serve` rebuilds with the pipeline defaults and serves the same artifact locally at `http://127.0.0.1:8080/dev-standards/`. Prereleases are explicit local publications rather than GitHub Actions runs. First set `package.json` to the intended stable release line `X.Y.Z`; then, from a clean checkout with the Gitea registry and `GITEA_TOKEN` configured, run a prerelease tag on that same core, for example:
 
 ```bash
-npm run prerelease:publish -- v0.4.1-beta.0
+npm run prerelease:publish -- v0.5.0-beta.0
 ```
 
 The command validates the prerelease tag against the package release line, checks the Git worktree and tag, runs tests/catalog/package validation, creates the tag locally when necessary, builds and publishes a temporary package stamped with the prerelease version, and only then pushes the tag to origin. If package publication fails, a newly created local tag is removed and no remote tag is left behind.
