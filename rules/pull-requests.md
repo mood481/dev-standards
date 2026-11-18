@@ -6,20 +6,25 @@ Make pull requests meaningful integration units with correct dependency relation
 
 ## Integration purpose
 
-- A pull request MUST have one integration purpose.
-- A pull request MUST NOT be opened merely because a branch exists.
-- Independent changes MUST use independent pull requests even when they belong to the same initiative.
-- Large changes SHOULD be split at stable integration boundaries rather than arbitrary file counts or implementation chronology.
-- Multiple pull requests MUST NOT represent the same effective change unless they are genuine dependency stages.
+- A task pull request MUST represent one concrete, well-defined task and originate from its dedicated `feature/*` or `bugfix/*` branch.
+- A pull request MUST NOT be opened merely because a branch exists; open it when there is a coherent change ready for review or useful early feedback.
+- Independent tasks MUST use separate pull requests, even when they belong to the same initiative. Review corrections within the same task MUST remain on its existing branch and PR.
+- One task MUST NOT be arbitrarily split into successive, near-identical PRs merely to record file-by-file edits, intermediate checkpoints or review iterations.
+- A broad initiative MAY be divided into multiple feature tasks and PRs at meaningful, independently reviewable integration boundaries. Genuine dependencies MUST follow the explicit stacked-feature process below.
+- Multiple pull requests MUST NOT represent the same effective change unless they are deliberate, non-overlapping dependency stages.
 
 ## Base and dependencies
 
-- The base branch MUST be the branch that logically receives the change next.
-- An integration branch MUST NOT be selected automatically when the work depends on another unmerged branch.
-- A dependent pull request SHOULD target its dependency while that dependency remains unmerged, then be updated and retargeted after the dependency merges.
-- Sibling changes that are truly independent MAY target the same integration branch in parallel.
-- Stacked pull requests MUST expose a clear dependency order and MUST NOT create competing paths for the same commits.
-- Before opening a pull request, contributors MUST check whether an existing pull request already represents the same integration intent.
+- An ordinary `feature/*` branch MUST start from `devel` and its PR MUST target `devel`, unless it is a justified dependent feature stage.
+- A dependent feature stage MAY branch from an unmerged feature only when a broader initiative merits separately reviewable stages and its implementation truly requires the earlier stage.
+- While the dependency remains unmerged, the dependent feature PR MUST target the immediate dependency branch rather than `devel`; its description MUST identify the prerequisite PR and integration order.
+- After the prerequisite merges, the dependent PR MUST be retargeted to `devel` and its entire diff and remaining commits MUST be rechecked for accidental inclusion or duplication. Any necessary history adjustment MUST preserve shared work and follow the commit-rewriting safeguards.
+- Independent sibling feature tasks MAY open separate PRs to `devel` in parallel. Features that depend on pending work MUST NOT be presented as independent, consecutive PRs directly to `devel`.
+- Every `bugfix/*` branch MUST start from `devel`, and its PR MUST target `devel`. Bugfix PRs MUST NOT be stacked, target feature branches or depend on unmerged bugfixes; an unmet prerequisite MUST first be integrated into `devel`.
+- Defects that are part of an unmerged feature MUST be resolved on that feature branch instead of opening a dependent bugfix PR.
+- Stacked feature PRs MUST expose a clear dependency order and MUST NOT create competing integration paths for the same commits.
+- Before opening a PR, contributors MUST check for an existing PR with the same task intent and review the full base-to-head diff, not only the latest commit. The branch, commits, changed files and PR description MUST match the stated scope.
+- Other explicitly documented repository integration workflows and the authorized promotion of `devel` to `main` are distinct from these ordinary task PR rules; they MUST NOT be inferred as exceptions for regular feature or bugfix work.
 
 ## Description
 
