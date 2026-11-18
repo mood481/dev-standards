@@ -37,17 +37,37 @@ Define reusable conventions for interoperable Web Components built with `LitElem
 - Side effects MUST NOT live in `render`.
 - Untrusted content MUST NOT be rendered through `unsafeHTML`, and untrusted values MUST NOT be passed to `unsafeCSS`.
 
+## Component templates and styles
+
+- Components SHOULD place their Lit HTML templates in an adjacent `<component>.template.ts` file, keeping the component class focused on reactive properties, state, lifecycle and behavior.
+- A consuming repository MAY define a convention to keep a trivial `render()` inline; triviality MUST NOT prevent extracting its template when the project prefers consistent separation.
+- A component's `render()` SHOULD delegate to or compose its template functions, preserving Lit's native rendering, directives, bindings and event behavior.
+- Template functions MUST return native Lit template results using `html` and MUST NOT introduce HTML text loading, runtime loaders, extra template compilers or `unsafeHTML` for the purpose of extraction.
+- Template functions SHOULD receive explicit typed data and event callbacks; they MUST NOT require passing the entire component instance or exposing private state merely to extract markup.
+- Extracted templates MUST remain free of side effects, avoid circular dependencies, and preserve the intended event-handler context.
+- Components with their own CSS MUST define component-specific styles in an adjacent `<component>.styles.ts` file, using native Lit `css` results consumed through the component's `static styles`.
+- Components without component-specific CSS need no `*.styles.ts` file. Shared style modules MAY be composed through `static styles` without copying their contents into the component class.
+- Template and style modules MUST NOT be exposed as package public APIs merely because they were separated from the component implementation.
+- Existing components MUST NOT undergo mechanical template or style extraction as an unrelated cleanup; organizational migrations are separate, validated changes.
+
 ## Styling and theming
 
 - Native CSS through `static styles` and the `css` tag is the default styling option.
-- Every component SHOULD have a usable default appearance without requiring a consumer-provided theme.
+- Every component MUST have a usable default appearance without requiring a consumer-provided theme.
 - Design tokens and theming SHOULD use CSS custom properties, especially for values intended to inherit through the component tree.
 - Properties SHOULD represent data, state or behavior; visual customization SHOULD prefer CSS custom properties instead of duplicating styling decisions as component properties.
 - `::part` and slots are an intentional public surface; internal selectors MUST NOT be exposed for styling.
 - CSS custom properties, parts, slots and other documented styling hooks form part of the component's public API and MUST be treated as versioned compatibility surfaces.
 - Components MUST NOT depend on global styles or embed external `<link>` stylesheets.
-- Existing design tokens SHOULD be reused before one-off values.
-- Theme inheritance, token precedence, concrete token names and supported theme combinations belong to the consuming library's architecture and documentation.
+- Existing shared or semantic tokens SHOULD provide defaults when they express the same role, but their presence MUST NOT preclude independent component customization.
+- Components MAY expose public CSS custom properties for component-specific typography, dimensions and spacing where independent customization has a demonstrated purpose; MUST NOT expose each internal CSS declaration as a public token.
+- Public component tokens MUST identify a meaningful role and only include a size when that distinction is needed; they MUST NOT be generated as an exhaustive matrix of component parts, dimensions, sizes and states.
+- A size-specific token for a role MUST NOT use another size's token for that same role as its fallback, even when their defaults happen to match.
+- Component tokens MAY fall back to a matching shared semantic token or directly to an internal baseline when no shared token expresses that role.
+- Different roles MAY have different defaults; supporting roles MAY intentionally remain fixed across size presets when that is their defined behavior.
+- Internal proportions and derived dimensions MAY remain private instead of expanding the component's public token API.
+- Every new public token MUST be documented and tested for explicit override, absent override, fallback behavior and isolation from unrelated parts, sizes and components.
+- Theme inheritance, token precedence, concrete token names, prefixes, size catalogs and supported theme combinations belong to the consuming library's architecture and documentation.
 - SCSS is not part of the initial standard; it MAY only be adopted through a repository-specific decision as a build step producing Lit-compatible CSS with no Sass runtime dependency.
 
 ## Tests and documentation
