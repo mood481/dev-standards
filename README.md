@@ -20,7 +20,7 @@ Repository-specific documentation stays in the consuming repository. The CLI aut
   "schemaVersion": 1,
   "source": {
     "repository": "mood481/dev-standards",
-    "version": "0.5.0"
+    "version": "0.5.1"
   },
   "context": [
     {
@@ -58,6 +58,7 @@ The schema is published as `schemas/manifest.schema.json`, and a complete packag
 ### Rules
 
 - `devel` — scope, cohesion, boundaries and change discipline.
+- `simple-devel` — the same core development rules, without a prescribed branch or PR workflow.
 - `quality` — validation and completion expectations.
 - `commits` — commit history conventions.
 - `pull-requests` — pull request integration and review conventions.
@@ -112,6 +113,15 @@ pnpm dlx @mood481/dev-standards@latest install \
   pocketbase \
   nx-pnpm
 ```
+
+For projects without a prescribed task-branch workflow, explicitly choose `simple-devel` **instead of** `devel`:
+
+```bash
+pnpm dlx @mood481/dev-standards@latest install \
+  simple-devel quality commits ts-js
+```
+
+The `devel` and `simple-devel` rules are mutually exclusive. Consumers MUST choose exactly one; the CLI does not enforce exclusivity. The simple variant does not define a branch or PR workflow; do not select `pull-requests` unless the repository deliberately adopts that rule's structured workflow.
 
 For new React Native + Expo projects, select both the general TypeScript guide and the mobile guide explicitly (the CLI does not resolve guide dependencies):
 
@@ -192,6 +202,10 @@ Ordinary development tasks use a dedicated `feature/<task>` branch for functiona
 
 Before the first push, contributors should consolidate their own unshared checkpoint commits when they only refine one cohesive task outcome. Published, shared or reviewed history is never rewritten automatically. See the installed `devel`, `pull-requests` and `commits` rules for the complete safeguards and merge strategy.
 
+## Maintaining development rule variants
+
+Maintainers: `rules/development.md` and `rules/simple-development.md` share the general change-scoping and completion requirements. When modifying those common requirements, review both documents intentionally. The simple variant intentionally omits branch and PR workflow rules. No automated synchronization or mutual-exclusivity validation is provided.
+
 ## Version channels
 
 - `devel` — development prereleases.
@@ -226,7 +240,7 @@ npm run docs:serve
 `docs:serve` rebuilds with the pipeline defaults and serves the same artifact locally at `http://127.0.0.1:8080/dev-standards/`. Prereleases are explicit local publications rather than GitHub Actions runs. First set `package.json` to the intended stable release line `X.Y.Z`; then, from a clean checkout with the Gitea registry and `GITEA_TOKEN` configured, run a prerelease tag on that same core, for example:
 
 ```bash
-npm run prerelease:publish -- v0.5.0-beta.0
+npm run prerelease:publish -- v0.5.1-beta.0
 ```
 
 The command validates the prerelease tag against the package release line, checks the Git worktree and tag, runs tests/catalog/package validation, creates the tag locally when necessary, builds and publishes a temporary package stamped with the prerelease version, and only then pushes the tag to origin. If package publication fails, a newly created local tag is removed and no remote tag is left behind.

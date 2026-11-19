@@ -1,6 +1,7 @@
 {
   "rule": {
     "devel": "rules/development.md",
+    "simple-devel": "rules/simple-development.md",
     "quality": "rules/quality.md",
     "commits": "rules/commits.md",
     "pull-requests": "rules/pull-requests.md",
