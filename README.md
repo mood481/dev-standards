@@ -20,7 +20,7 @@ Repository-specific documentation stays in the consuming repository. The CLI aut
   "schemaVersion": 1,
   "source": {
     "repository": "mood481/dev-standards",
-    "version": "0.5.1"
+    "version": "0.5.2"
   },
   "context": [
     {
@@ -73,6 +73,7 @@ The schema is published as `schemas/manifest.schema.json`, and a complete packag
 - `nx-pnpm`
 - `lit`
 - `react-native-expo` — React Native with TypeScript and Expo; adopt alongside `ts-js`.
+- `ionic-capacitor` — Ionic UI and Capacitor native apps; use alongside `angular` and `ts-js` for Ionic Angular.
 
 ## Registry setup
 
@@ -132,6 +133,16 @@ pnpm dlx @mood481/dev-standards@latest install \
 ```
 
 Expo supplies development tooling and native configuration; CI/CD, signing, distribution and update services remain project-owned and are not prescribed by this guide.
+
+For Ionic Angular projects, select the general TypeScript and Angular guides with the Ionic + Capacitor guide explicitly:
+
+```bash
+pnpm dlx @mood481/dev-standards@latest install \
+  simple-devel quality commits \
+  ts-js angular ionic-capacitor
+```
+
+Use `devel` instead of `simple-devel` when the repository follows the structured task-branch workflow; do not install both. Native build, signing and delivery remain project-owned.
 
 Use `--path <repository>` to target another checkout. Use `--agents` to also create `AGENTS.md` from the packaged template when it does not exist.
 
@@ -240,7 +251,7 @@ npm run docs:serve
 `docs:serve` rebuilds with the pipeline defaults and serves the same artifact locally at `http://127.0.0.1:8080/dev-standards/`. Prereleases are explicit local publications rather than GitHub Actions runs. First set `package.json` to the intended stable release line `X.Y.Z`; then, from a clean checkout with the Gitea registry and `GITEA_TOKEN` configured, run a prerelease tag on that same core, for example:
 
 ```bash
-npm run prerelease:publish -- v0.5.1-beta.0
+npm run prerelease:publish -- v0.5.2-beta.0
 ```
 
 The command validates the prerelease tag against the package release line, checks the Git worktree and tag, runs tests/catalog/package validation, creates the tag locally when necessary, builds and publishes a temporary package stamped with the prerelease version, and only then pushes the tag to origin. If package publication fails, a newly created local tag is removed and no remote tag is left behind.

@@ -1,21 +1,25 @@
 ---
 title: "dev-standards"
-description: "Versioned development rules and implementation guides for mood481 repositories."
+description: "Install and maintain versioned development rules and technology guides."
 ---
 
 # dev-standards
 
-Versioned development rules and implementation guides shared across mood481 repositories.
+Adopt shared development rules and technology guides in a repository, selecting only the standards that apply to its stack and workflow. The CLI installs versioned Markdown context for contributors and agents, validates it and updates it conservatively.
 
-The repository separates:
+## Get started
 
-- `rules/`: cross-cutting policy and completion requirements.
-- `guides/`: technology-specific implementation guidance.
-- `schemas/`: machine-readable adoption contracts.
-- `templates/`: small consumer entrypoints such as `AGENTS.md`.
+1. [Explore the standards](standards/) to choose the rules and technology guides relevant to your project.
+2. Follow [Getting started](getting-started/) to configure the registry and install your selection.
+3. Use `check` to detect missing or modified installed standards, and `update` when you want to adopt a newer package version.
 
-Repository-specific operational documentation stays in the consuming repository.
+For example, after configuring access to the package registry:
 
-- Start with [Getting started](getting-started/) for installation with `npx` or `pnpm dlx` and the install/check/update workflow.
-- Browse the [CLI reference](cli-reference/) for the complete `list`, `install`, `check` and `update` commands.
-- Browse the [Standards](standards/) for the catalog included in the current version, and the [manifest contract](standards/manifest/) behind `docs/manifest.json`.
+```bash
+pnpm dlx @mood481/dev-standards@latest install simple-devel quality commits ts-js
+pnpm dlx @mood481/dev-standards@latest check
+```
+
+Installed selections are recorded in `docs/manifest.json`; see the [manifest contract](standards/manifest/) to understand what it tracks. An optional `AGENTS.md` helps coding agents find that context, but is not required for using the CLI.
+
+See the [CLI reference](cli-reference/) for supported commands, options and validation behavior.

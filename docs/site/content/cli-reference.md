@@ -47,7 +47,9 @@ pnpm dlx @mood481/dev-standards@latest check --path /tmp/example
 ```
 
 - Accepts no standard ids; it operates on `docs/manifest.json`.
-- Fails on a missing or modified package-managed document, on manifest context that does not match the selection, and on consumer-owned context that drifted from its `docs/` directories.
+- Fails on a missing or modified package-managed document, on manifest context that does not match the selection, and on missing or unindexed consumer-owned Markdown context.
+- Auto-discovers only immediate `*.md` files in `docs/operations/`, `docs/adrs/`, `docs/runbooks/` and `docs/references/`. Other safe `docs/**/*.md` paths may be indexed explicitly in the manifest; these are checked for presence but not auto-discovered.
+- Does not scan unrelated directories, nested files in those conventional directories, or non-Markdown assets such as `examples/*.yaml`. Those files are outside the manifest contract.
 - Absence of `AGENTS.md` is normal: no warning and no failure solely because the file is missing.
 - On success prints `ok\t<version>\t<N rules>\t<M guides>`.
 
@@ -63,6 +65,7 @@ pnpm dlx @mood481/dev-standards@next update --path /tmp/example
 - Refuses downgrades and missing installed standards.
 - Refuses to overwrite locally modified files; divergence surfaces as a conflict.
 - Rewrites `docs/manifest.json` with the new exact source version and refreshes managed plus consumer-owned entries.
+- Adds newly discovered conventional Markdown context to the manifest; it does not ingest arbitrary files elsewhere in the repository.
 - Never creates `AGENTS.md` implicitly and preserves any existing `AGENTS.md`.
 - Prints `updated\t<from>\t->\t<to>`, or `current\t<version>` when already up to date.
 

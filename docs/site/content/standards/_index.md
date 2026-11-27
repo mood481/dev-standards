@@ -28,5 +28,6 @@ Choose **either** `devel` **or** `simple-devel`, not both. They are mutually exc
 - [nx-pnpm](guides/nx-pnpm/) — Nx with pnpm.
 - [lit](guides/lit/) — Lit web components.
 - [react-native-expo](guides/react-native-expo/) — React Native, TypeScript and Expo.
+- [ionic-capacitor](guides/ionic-capacitor/) — Ionic interfaces and Capacitor native applications.
 
 The `adr`, `runbook` and `reference` catalog maps are currently empty and ready for shared documents when needed. See the [manifest contract](manifest/) for how package-managed and consumer-owned entries combine in `docs/manifest.json`.

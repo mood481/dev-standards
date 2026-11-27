@@ -217,3 +217,32 @@ test('installs the React Native + Expo guide without implicit ts-js installation
     ['react-native-expo', 'ts-js'],
   );
 });
+
+
+test('installs the Ionic + Capacitor guide without implicit companion guides', async () => {
+  const catalog = await loadCatalog();
+  assert.equal(catalog.guide?.['ionic-capacitor'], 'guides/ionic-capacitor.md');
+
+  const listed = run(['list']);
+  assert.equal(listed.status, 0, listed.stderr);
+  assert.match(listed.stdout, /^guide\tionic-capacitor$/m);
+
+  const target = await makeTarget();
+  let result = run(['install', 'ionic-capacitor', '--path', target]);
+  assert.equal(result.status, 0, result.stderr);
+  result = run(['check', '--path', target]);
+  assert.equal(result.status, 0, result.stderr);
+
+  const manifest = await readConsumerManifest(target);
+  assert.deepEqual(manifest.context.map((entry) => entry.id), ['ionic-capacitor']);
+  const entry = manifest.context[0];
+  assert.equal(entry.type, 'guide');
+  assert.equal(entry.path, 'docs/guides/ionic-capacitor.md');
+  assert.match(entry.integrity, /^sha256:[a-f0-9]{64}$/);
+
+  const guide = await readFile(join(target, 'docs', 'guides', 'ionic-capacitor.md'), 'utf8');
+  assert.match(guide, /^# Ionic \+ Capacitor guide$/m);
+  assert.match(guide, /Angular integration profile/);
+  assert.match(guide, /does not resolve dependencies/);
+  assert.match(guide, /No CI\/CD vendor/);
+});

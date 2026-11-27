@@ -84,6 +84,8 @@ docs/
 
 With `--agents`, the installer also creates `AGENTS.md` from the packaged template only when it does not already exist.
 
+`docs/manifest.json` records the selected standards and their integrity hashes, together with references to consumer-owned Markdown context. The optional `AGENTS.md` is a short entrypoint for agents to read that manifest and the relevant rules, guides and local documents. It is not a replacement for the manifest, and an existing `AGENTS.md` is never overwritten.
+
 An existing `AGENTS.md` is always preserved and never overwritten. `install` without `--agents` never creates it. Standards-owned files are never overwritten by `install` when they differ locally. Adding standards from a newer package version requires `update` first so the manifest always describes one coherent source version.
 
 ## Check

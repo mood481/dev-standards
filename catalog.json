@@ -14,7 +14,8 @@
     "go": "guides/go.md",
     "nx-pnpm": "guides/nx-pnpm.md",
     "lit": "guides/lit-web-components.md",
-    "react-native-expo": "guides/react-native-expo.md"
+    "react-native-expo": "guides/react-native-expo.md",
+    "ionic-capacitor": "guides/ionic-capacitor.md"
   },
   "adr": {},
   "runbook": {},
